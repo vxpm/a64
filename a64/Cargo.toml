@@ -1,0 +1,9 @@
+[package]
+name = "a64"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+a64-macros = { path = "../a64-macros" }
+bitos = { git = "https://github.com/vxpm/bitos.git" }
+derive_more = { version = "2.1", features = ["display"] }
