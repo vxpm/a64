@@ -1,3 +1,5 @@
+//! Move wide (immediate)
+
 use core::fmt::Display;
 
 use a64_macros::bit_match;

@@ -1,3 +1,4 @@
+pub mod branch_sys;
 pub mod dp_imm;
 pub mod load_store;
 pub mod reserved;
@@ -304,7 +305,7 @@ impl Display for XrSp {
 pub enum Instruction {
     Reserved(reserved::Instruction),
     DpImm(dp_imm::Instruction),
-    // BranchSys,
+    BranchSys(branch_sys::Instruction),
     // DpReg,
     // SimdFp,
     LoadStore(load_store::Instruction),
@@ -320,7 +321,7 @@ impl Instruction {
             match (op0, op1) {
                 ("0", "0000") => Instruction::Reserved(reserved::Instruction::new(value)?),
                 ("_", "100_") => Instruction::DpImm(dp_imm::Instruction::new(value)?),
-                // ("_", "101_") => Instruction::BranchSys,
+                ("_", "101_") => Instruction::BranchSys(branch_sys::Instruction::new(value)?),
                 // ("_", "_101") => Instruction::DpReg,
                 // ("_", "_111") => Instruction::SimdFp,
                 ("_", "_1_0") => Instruction::LoadStore(load_store::Instruction::new(value)?),
