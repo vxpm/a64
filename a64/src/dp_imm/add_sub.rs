@@ -1,6 +1,6 @@
 //! Add/subtract (immediate)
 
-use crate::{Wr, WrSp, Xr, XrSp};
+use crate::{WrSp, WrUnk, XrSp, XrUnk};
 use a64_macros::bit_match;
 use bitos::integer::u12;
 use bitos::{BitUtils, bitos};
@@ -44,7 +44,7 @@ macro_rules! display {
 pub struct Add32 {
     /// Destination register.
     #[bits(0..5)]
-    pub rd: Wr,
+    pub rd: WrUnk,
     /// Source register.
     #[bits(5..10)]
     pub rn: WrSp,
@@ -72,7 +72,7 @@ impl Display for Add32 {
 pub struct Sub32 {
     /// Destination register.
     #[bits(0..5)]
-    pub rd: Wr,
+    pub rd: WrUnk,
     /// Source register.
     #[bits(5..10)]
     pub rn: WrSp,
@@ -100,7 +100,7 @@ impl Display for Sub32 {
 pub struct Add64 {
     /// Destination register.
     #[bits(0..5)]
-    pub rd: Xr,
+    pub rd: XrUnk,
     /// Source register.
     #[bits(5..10)]
     pub rn: XrSp,
@@ -128,7 +128,7 @@ impl Display for Add64 {
 pub struct Sub64 {
     /// Destination register.
     #[bits(0..5)]
-    pub rd: Xr,
+    pub rd: XrUnk,
     /// Source register.
     #[bits(5..10)]
     pub rn: XrSp,

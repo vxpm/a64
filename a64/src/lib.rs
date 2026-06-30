@@ -9,10 +9,10 @@ use a64_macros::bit_match;
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-/// Enumeration of the general purpose registers (32 bit).
+/// Enumeration of the general purpose registers (32 bit). The 32nd register is considered unknown.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Wr {
+pub enum WrUnk {
     W0,
     W1,
     W2,
@@ -47,15 +47,9 @@ pub enum Wr {
     Unknown,
 }
 
-impl Display for Wr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-impl Wr {
+impl WrUnk {
     #[inline(always)]
-    pub fn with_zr(self) -> WrZr {
+    pub fn with_zr(self) -> Wr {
         // SAFETY: both are C-like enums with the same amount of variants
         unsafe { std::mem::transmute(self) }
     }
@@ -70,7 +64,7 @@ impl Wr {
 /// Enumeration of the general purpose registers (32 bit) and ZR as the 32nd value.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WrZr {
+pub enum Wr {
     W0,
     W1,
     W2,
@@ -105,7 +99,7 @@ pub enum WrZr {
     WZR,
 }
 
-impl Display for WrZr {
+impl Display for Wr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
     }
@@ -155,10 +149,10 @@ impl Display for WrSp {
     }
 }
 
-/// Enumeration of the general purpose registers (64 bit).
+/// Enumeration of the general purpose registers (64 bit). The 32nd register is considered unknown.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Xr {
+pub enum XrUnk {
     X0,
     X1,
     X2,
@@ -193,15 +187,9 @@ pub enum Xr {
     Unknown,
 }
 
-impl Display for Xr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-impl Xr {
+impl XrUnk {
     #[inline(always)]
-    pub fn with_zr(self) -> XrZr {
+    pub fn with_zr(self) -> Xr {
         // SAFETY: both are C-like enums with the same amount of variants
         unsafe { std::mem::transmute(self) }
     }
@@ -216,7 +204,7 @@ impl Xr {
 /// Enumeration of the general purpose registers (64 bit) and ZR as the 32nd value.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum XrZr {
+pub enum Xr {
     X0,
     X1,
     X2,
@@ -251,7 +239,7 @@ pub enum XrZr {
     XZR,
 }
 
-impl Display for XrZr {
+impl Display for Xr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
     }
