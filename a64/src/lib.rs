@@ -329,3 +329,22 @@ impl Instruction {
         })
     }
 }
+
+#[test]
+fn test_app() {
+    let data = std::fs::read("/home/vxpm/dev/nx_hello.elf").unwrap();
+    let main_offset = 0x10180;
+
+    let mut offset = main_offset;
+    loop {
+        let value = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+        if let Some(ins) = Instruction::new(value) {
+            println!("{value:08X} => {ins}");
+        } else {
+            println!("{value:08X} => UNKNOWN ({value:032b})");
+            panic!();
+        }
+
+        offset += 4;
+    }
+}
