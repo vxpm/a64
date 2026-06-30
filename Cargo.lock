@@ -15,6 +15,7 @@ dependencies = [
 name = "a64-macros"
 version = "0.1.0"
 dependencies = [
+ "proc-macro2",
  "quote",
  "syn",
 ]
@@ -28,7 +29,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "bitos"
 version = "0.1.0"
-source = "git+https://github.com/vxpm/bitos.git#1a25048dce52b63f496f51f73a90e0cc14f0e220"
+source = "git+https://github.com/vxpm/bitos.git#a2bb26592f3a6270d2e228b915ed098bd95105ce"
 dependencies = [
  "bitos_core",
  "bitos_macro",
@@ -38,7 +39,7 @@ dependencies = [
 [[package]]
 name = "bitos_core"
 version = "0.1.0"
-source = "git+https://github.com/vxpm/bitos.git#1a25048dce52b63f496f51f73a90e0cc14f0e220"
+source = "git+https://github.com/vxpm/bitos.git#a2bb26592f3a6270d2e228b915ed098bd95105ce"
 dependencies = [
  "bitut",
  "num-traits",
@@ -48,7 +49,7 @@ dependencies = [
 [[package]]
 name = "bitos_macro"
 version = "0.1.0"
-source = "git+https://github.com/vxpm/bitos.git#1a25048dce52b63f496f51f73a90e0cc14f0e220"
+source = "git+https://github.com/vxpm/bitos.git#a2bb26592f3a6270d2e228b915ed098bd95105ce"
 dependencies = [
  "bitos_macro_core",
  "proc-macro2",
@@ -57,7 +58,7 @@ dependencies = [
 [[package]]
 name = "bitos_macro_core"
 version = "0.1.0"
-source = "git+https://github.com/vxpm/bitos.git#1a25048dce52b63f496f51f73a90e0cc14f0e220"
+source = "git+https://github.com/vxpm/bitos.git#a2bb26592f3a6270d2e228b915ed098bd95105ce"
 dependencies = [
  "heck",
  "proc-macro2",
