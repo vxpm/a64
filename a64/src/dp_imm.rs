@@ -1,11 +1,11 @@
 //! Data Processing - Immediate
 
+pub mod add_sub;
+pub mod mov_wide;
+
 use a64_macros::bit_match;
 use bitos::BitUtils;
 use derive_more::Display;
-
-pub mod add_sub;
-pub mod mov_wide;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {

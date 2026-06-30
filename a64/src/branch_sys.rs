@@ -1,11 +1,15 @@
 //! Branches, Exception Generating and System instructions
 
+pub mod uncond_branch_imm;
+
 use a64_macros::bit_match;
 use bitos::BitUtils;
 use derive_more::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
-pub enum Instruction {}
+pub enum Instruction {
+    UncondBranchImm(uncond_branch_imm::Instruction),
+}
 
 impl Instruction {
     pub fn new(value: u32) -> Option<Self> {
@@ -35,7 +39,7 @@ impl Instruction {
                 ("110", "0101_1____", "____", "_____") => todo!("sys reg pair move"),
                 ("110", "1_________", "____", "_____") => todo!("uncond branch (reg)"),
 
-                ("_00", "__________", "____", "_____") => todo!("uncond branch (imm)"),
+                ("_00", "__________", "____", "_____") => Self::UncondBranchImm(uncond_branch_imm::Instruction::new(value)?),
 
                 ("_01", "0_________", "____", "_____") => todo!("cmp and branch (imm)"),
                 ("_01", "1_________", "____", "_____") => todo!("test and branch (imm)"),
