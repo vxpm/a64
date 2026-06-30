@@ -1,6 +1,7 @@
 //! Data Processing - Immediate
 
 pub mod add_sub;
+pub mod logical;
 pub mod mov_wide;
 
 use a64_macros::bit_match;
@@ -10,6 +11,7 @@ use derive_more::Display;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     AddSub(add_sub::Instruction),
+    Logical(logical::Instruction),
     MovWide(mov_wide::Instruction),
 }
 
@@ -25,7 +27,7 @@ impl Instruction {
                 ("__", "010_") => Self::AddSub(add_sub::Instruction::new(value)?),
                 ("__", "0110") => todo!("add sub with tags"),
                 ("__", "0111") => todo!("min max"),
-                ("__", "100_") => todo!("logical"),
+                ("__", "100_") => Self::Logical(logical::Instruction::new(value)?),
                 ("__", "101_") => Self::MovWide(mov_wide::Instruction::new(value)?),
                 ("__", "110_") => todo!("bitfield"),
                 ("__", "111_") => todo!("extract"),
