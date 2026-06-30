@@ -20,7 +20,7 @@ pub struct Branch {
 
 impl Display for Branch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "B .{:+}", self.imm().value() * 4)
+        write!(f, "B #{}", self.imm().value() * 4)
     }
 }
 
@@ -38,7 +38,7 @@ pub struct BranchLink {
 
 impl Display for BranchLink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BL .{:+}", self.imm().value() * 4)
+        write!(f, "BL #{}", self.imm().value() * 4)
     }
 }
 

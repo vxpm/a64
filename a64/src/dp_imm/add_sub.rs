@@ -13,7 +13,7 @@ macro_rules! display {
             if self.s() {
                 write!(
                     f,
-                    "{}S {}, {}, {}, #LSL {}",
+                    "{}S {}, {}, {}, LSL #{}",
                     $base,
                     self.rd().with_zr(),
                     self.rn(),
@@ -23,7 +23,7 @@ macro_rules! display {
             } else {
                 write!(
                     f,
-                    "{} {}, {}, {}, #LSL {}",
+                    "{} {}, {}, {}, LSL #{}",
                     $base,
                     self.rd().with_sp(),
                     self.rn(),
