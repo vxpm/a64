@@ -162,10 +162,10 @@ impl Instruction {
 
         Some(bit_match! {
             match (op, sf) {
-                ("0", "0") => Instruction::Add32(Add32(value)),
-                ("0", "1") => Instruction::Add64(Add64(value)),
-                ("1", "0") => Instruction::Sub32(Sub32(value)),
-                ("1", "1") => Instruction::Sub64(Sub64(value)),
+                ("0", "0") => Self::Add32(Add32(value)),
+                ("0", "1") => Self::Add64(Add64(value)),
+                ("1", "0") => Self::Sub32(Sub32(value)),
+                ("1", "1") => Self::Sub64(Sub64(value)),
                 _ => return None,
             }
         })

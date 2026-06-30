@@ -30,7 +30,7 @@ impl Instruction {
 
         Some(bit_match! {
             match (op0, op1) {
-                ("0", "000000000") => Instruction::Undefined(Undefined(value)),
+                ("0", "000000000") => Self::Undefined(Undefined(value)),
                 _ => return None,
             }
         })

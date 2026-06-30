@@ -22,11 +22,11 @@ impl Instruction {
             match (op0, op1) {
                 ("11", "111_") => todo!("one src"),
                 ("__", "00__") => todo!("pc rel addressing"),
-                ("__", "010_") => Instruction::AddSub(add_sub::Instruction::new(value)?),
+                ("__", "010_") => Self::AddSub(add_sub::Instruction::new(value)?),
                 ("__", "0110") => todo!("add sub with tags"),
                 ("__", "0111") => todo!("min max"),
                 ("__", "100_") => todo!("logical"),
-                ("__", "101_") => Instruction::MovWide(mov_wide::Instruction::new(value)?),
+                ("__", "101_") => Self::MovWide(mov_wide::Instruction::new(value)?),
                 ("__", "110_") => todo!("bitfield"),
                 ("__", "111_") => todo!("extract"),
                 _ => return None,
