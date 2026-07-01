@@ -9,6 +9,169 @@ use core::fmt::Display;
 use a64_macros::bit_match;
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
+use either::Either;
+
+/// Width used for accessing and manipulating the general purpose registers.
+#[bitos(1)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegWidth {
+    W32,
+    X64,
+}
+
+/// Enumeration of the general purpose registers. The 32nd register is considered unknown.
+#[bitos(5)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegUnk {
+    R0,
+    R1,
+    R2,
+    R3,
+    R4,
+    R5,
+    R6,
+    R7,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+    R16,
+    R17,
+    R18,
+    R19,
+    R20,
+    R21,
+    R22,
+    R23,
+    R24,
+    R25,
+    R26,
+    R27,
+    R28,
+    R29,
+    R30,
+    Unknown,
+}
+
+impl RegUnk {
+    #[inline(always)]
+    pub fn with_width(self, width: RegWidth) -> Either<WrUnk, XrUnk> {
+        match width {
+            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute(self) }),
+            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute(self) }),
+        }
+    }
+
+    #[inline(always)]
+    pub fn with_zr(self) -> Reg {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    #[inline(always)]
+    pub fn with_sp(self) -> RegSp {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// Enumeration of the general purpose registers and ZR as the 32nd value.
+#[bitos(5)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reg {
+    R0,
+    R1,
+    R2,
+    R3,
+    R4,
+    R5,
+    R6,
+    R7,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+    R16,
+    R17,
+    R18,
+    R19,
+    R20,
+    R21,
+    R22,
+    R23,
+    R24,
+    R25,
+    R26,
+    R27,
+    R28,
+    R29,
+    R30,
+    RZR,
+}
+
+impl Reg {
+    #[inline(always)]
+    pub fn with_width(self, width: RegWidth) -> Either<Wr, Xr> {
+        match width {
+            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute(self) }),
+            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute(self) }),
+        }
+    }
+}
+
+/// Enumeration of the general purpose registers and SP as the 32nd value.
+#[bitos(5)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegSp {
+    R0,
+    R1,
+    R2,
+    R3,
+    R4,
+    R5,
+    R6,
+    R7,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+    R16,
+    R17,
+    R18,
+    R19,
+    R20,
+    R21,
+    R22,
+    R23,
+    R24,
+    R25,
+    R26,
+    R27,
+    R28,
+    R29,
+    R30,
+    SP,
+}
+
+impl RegSp {
+    #[inline(always)]
+    pub fn with_width(self, width: RegWidth) -> Either<WrSp, XrSp> {
+        match width {
+            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute(self) }),
+            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute(self) }),
+        }
+    }
+}
 
 /// Enumeration of the general purpose registers (32 bit). The 32nd register is considered unknown.
 #[bitos(5)]
