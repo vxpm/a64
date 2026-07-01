@@ -1,5 +1,6 @@
 pub mod branch_sys;
 pub mod dp_imm;
+pub mod dp_reg;
 pub mod load_store;
 pub mod reserved;
 
@@ -294,7 +295,7 @@ pub enum Instruction {
     Reserved(reserved::Instruction),
     DpImm(dp_imm::Instruction),
     BranchSys(branch_sys::Instruction),
-    // DpReg,
+    DpReg(dp_reg::Instruction),
     // SimdFp,
     LoadStore(load_store::Instruction),
 }
@@ -310,7 +311,7 @@ impl Instruction {
                 ("0", "0000") => Self::Reserved(reserved::Instruction::new(value)?),
                 ("_", "100_") => Self::DpImm(dp_imm::Instruction::new(value)?),
                 ("_", "101_") => Self::BranchSys(branch_sys::Instruction::new(value)?),
-                // ("_", "_101") => Instruction::DpReg,
+                ("_", "_101") => Self::DpReg(dp_reg::Instruction::new(value)?),
                 // ("_", "_111") => Instruction::SimdFp,
                 ("_", "_1_0") => Self::LoadStore(load_store::Instruction::new(value)?),
                 _ => return None,
