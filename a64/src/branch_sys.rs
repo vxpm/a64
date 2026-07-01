@@ -3,9 +3,11 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::i26;
+use bitos::integer::{i14, i26, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
+
+use crate::{Reg, RegWidth};
 
 /// Branch
 ///
@@ -29,9 +31,52 @@ impl Display for UncondBranchImm {
     }
 }
 
+/// Test bit and branch if (non)zero
+///
+/// This instruction compares the value of a test bit with zero, and conditionally branches to a
+/// label at a PC-relative offset if the comparison is (not) equal. This instruction provides a hint
+/// that this is not a subroutine call or return. This instruction does not affect condition flags.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TestBranch {
+    /// General purpose register to be tested.
+    #[bits(0..5)]
+    pub rt: Reg,
+    /// Offset from the address of this instruction, divided by 4.
+    #[bits(5..19)]
+    pub imm: i14,
+    /// Index of the bit to be tested. If the register width is 64 bits, this is an index into the
+    /// higher half of the register.
+    #[bits(19..24)]
+    pub bit: u5,
+    /// Whether to only branch if not zero (i.e. invert the condition).
+    #[bits(24)]
+    pub not: bool,
+    /// Width of the register.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for TestBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.not() { "TBNZ" } else { "TBZ" };
+        let index = self.bit().value() + if self.sf() == RegWidth::X64 { 32 } else { 0 };
+
+        write!(
+            f,
+            "{} {}, #{}, #{}",
+            mnemonic,
+            self.rt().with_width(self.sf()),
+            index,
+            self.imm().value() * 4
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     UncondBranchImm(UncondBranchImm),
+    TestBranch(TestBranch),
 }
 
 impl Instruction {
@@ -65,7 +110,7 @@ impl Instruction {
                 ("_00", "__________", "____", "_____") => Self::UncondBranchImm(UncondBranchImm(value)),
 
                 ("_01", "0_________", "____", "_____") => todo!("cmp and branch (imm)"),
-                ("_01", "1_________", "____", "_____") => todo!("test and branch (imm)"),
+                ("_01", "1_________", "____", "_____") => Self::TestBranch(TestBranch(value)),
 
                 ("_11", "00________", "00__", "_____") => todo!("cmp regs and branch"),
                 ("_11", "01________", "_0__", "_____") => todo!("cmp reg with imm and branch"),
