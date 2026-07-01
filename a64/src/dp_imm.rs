@@ -2,16 +2,53 @@
 
 pub mod logical;
 pub mod mov_wide;
-pub mod pc_rel_addr;
 
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::u12;
+use bitos::integer::{u2, u12, u19};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{RegSp, RegUnk, RegWidth};
+use crate::{RegSp, RegUnk, RegWidth, Xr};
+
+/// Form PC-relative address, possibly to 4 KiB page
+///
+/// This instruction adds an immediate value to the PC value to form a PC-relative address, and
+/// writes the result to the destination register. If the target is a page, the immediate is shifted
+/// left by 12 and the 12 lower bits of the result are masked.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PcRelAddr {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Xr,
+    /// Immediate value high.
+    #[bits(5..24)]
+    pub immhi: u19,
+    /// Immediate value low.
+    #[bits(29..31)]
+    pub immlo: u2,
+    /// Whether the address targets a 4 KiB page.
+    #[bits(31)]
+    pub to_page: bool,
+}
+
+impl Display for PcRelAddr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let imm = 0.with_bits(0, 2, self.immlo().value() as u64).with_bits(
+            2,
+            21,
+            self.immhi().value() as u64,
+        );
+
+        if self.to_page() {
+            write!(f, "ADRP {}, #{}", self.rd(), imm << 12)
+        } else {
+            write!(f, "ADR {}, #{}", self.rd(), imm)
+        }
+    }
+}
 
 /// Add or subtract immediate value
 ///
@@ -74,7 +111,7 @@ impl Display for AddSub {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
-    PcRelAddr(pc_rel_addr::Instruction),
+    PcRelAddr(PcRelAddr),
     AddSub(AddSub),
     Logical(logical::Instruction),
     MovWide(mov_wide::Instruction),
@@ -88,7 +125,7 @@ impl Instruction {
         Some(bit_match! {
             match (op0, op1) {
                 ("11", "111_") => todo!("one src"),
-                ("__", "00__") => Self::PcRelAddr(pc_rel_addr::Instruction::new(value)?),
+                ("__", "00__") => Self::PcRelAddr(PcRelAddr(value)),
                 ("__", "010_") => Self::AddSub(AddSub(value)),
                 ("__", "0110") => todo!("add sub with tags"),
                 ("__", "0111") => todo!("min max"),
