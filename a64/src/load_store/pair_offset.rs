@@ -1,4 +1,4 @@
-//! Load/store register pair (pre-indexed)
+//! Load/store register pair (offset)
 
 use core::fmt::Display;
 
@@ -8,18 +8,18 @@ use derive_more::{Deref, Display};
 
 use crate::load_store::Repr64;
 
-/// Store pair of registers
+/// Load pair of registers
 ///
-/// This instruction calculates an address from a base register value and an immediate offset, and
-/// stores two 64-bit doublewords to the calculated address, from two registers.
+/// This instruction calculates an address from a base register value and an immediate offset, loads
+/// two 32-bit words or two 64-bit doublewords from memory, and writes them to two registers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deref)]
-pub struct Stp64(pub Repr64);
+pub struct Ldp64(pub Repr64);
 
-impl Display for Stp64 {
+impl Display for Ldp64 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "STP {}, {}, [{}, #{}]!",
+            "LDP {}, {}, [{}, #{}]",
             self.rt1(),
             self.rt2(),
             self.rtn(),
@@ -30,7 +30,7 @@ impl Display for Stp64 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
-    Stp64(Stp64),
+    Ldp64(Ldp64),
 }
 
 impl Instruction {
@@ -51,8 +51,8 @@ impl Instruction {
                 ("01", "1", "0") => todo!("stp simd/fp 64 bit"),
                 ("01", "1", "1") => todo!("ldp simd/fp 64 bit"),
 
-                ("10", "0", "0") => Self::Stp64(Stp64(Repr64(value))),
-                ("10", "0", "1") => todo!("ldp 64 bit"),
+                ("10", "0", "0") => todo!("stp 64 bit"),
+                ("10", "0", "1") => Self::Ldp64(Ldp64(Repr64(value))),
                 ("10", "1", "0") => todo!("stp simd/fp 128 bit"),
                 ("10", "1", "1") => todo!("ldp simd/fp 128 bit"),
 

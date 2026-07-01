@@ -1,13 +1,35 @@
 //! Loads and Stores
 
+pub mod pair_offset;
 pub mod pair_pre;
 
 use a64_macros::bit_match;
-use bitos::BitUtils;
+use bitos::integer::i7;
+use bitos::{BitUtils, bitos};
 use derive_more::Display;
+
+use crate::{Xr, XrSp};
+
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Repr64 {
+    /// First general-purpose register to be transferred.
+    #[bits(0..5)]
+    pub rt1: Xr,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rtn: XrSp,
+    /// Second general-purpose register to be transferred.
+    #[bits(10..15)]
+    pub rt2: Xr,
+    /// Offset divided by 8.
+    #[bits(15..22)]
+    pub imm: i7,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    PairOffset(pair_offset::Instruction),
     PairPre(pair_pre::Instruction),
 }
 
@@ -54,7 +76,7 @@ impl Instruction {
 
                 ("__10", "_", "00___________", "__") => todo!("load/store no-alloc pair (offset)"),
                 ("__10", "_", "01___________", "__") => todo!("load/store reg pair (post-indexed)"),
-                ("__10", "_", "10___________", "__") => todo!("load/store reg pair (offset)"),
+                ("__10", "_", "10___________", "__") => Self::PairOffset(pair_offset::Instruction::new(value)?),
                 ("__10", "_", "11___________", "__") => Self::PairPre(pair_pre::Instruction::new(value)?),
 
                 ("__11", "_", "0__0_________", "00") => todo!("load/store reg (unscaled imm)"),
