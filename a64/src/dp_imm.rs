@@ -7,7 +7,7 @@ use bitos::integer::{u2, u6, u12, u19};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{Reg, RegSp, RegUnk, RegWidth, Xr};
+use crate::{LogicalOp, Reg, RegSp, RegUnk, RegWidth, Xr};
 
 /// Form PC-relative address, possibly to 4 KiB page
 ///
@@ -135,33 +135,6 @@ pub fn decode_logical_imm(_n: bool, imms: u6, immr: u6) -> u64 {
     pattern.rotate_right(immr as u32 & immr_mask)
 }
 
-/// Specifies the operation of a logical operation.
-#[bitos(2)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LogicalOp {
-    /// Bitwise and.
-    And = 0b00,
-    /// Bitwise or.
-    Or = 0b01,
-    /// Exclusive or.
-    Xor = 0b10,
-    /// Bitwise and, but also updates condition flags.
-    Ands = 0b11,
-}
-
-impl Display for LogicalOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mnemonic = match self {
-            Self::And => "AND",
-            Self::Or => "ORR",
-            Self::Xor => "EOR",
-            Self::Ands => "ANDS",
-        };
-
-        write!(f, "{mnemonic}")
-    }
-}
-
 /// Logical operation
 ///
 /// This instruction performs a bitwise operation between a register value and an immediate value,
@@ -184,7 +157,7 @@ pub struct Logical {
     /// Whether the immediate is 64 bit wide instead of 32 bit.
     #[bits(22)]
     pub n: bool,
-    /// Specifies the bitwise operation.
+    /// The bitwise operation.
     #[bits(29..31)]
     pub op: LogicalOp,
     /// Width of the registers.

@@ -471,6 +471,60 @@ impl Display for XrSp {
     }
 }
 
+/// Specifies the operation of a logical operation.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogicalOp {
+    /// Bitwise and.
+    And = 0b00,
+    /// Bitwise or.
+    Or = 0b01,
+    /// Exclusive or.
+    Xor = 0b10,
+    /// Bitwise and, but also updates condition flags.
+    Ands = 0b11,
+}
+
+impl Display for LogicalOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self {
+            Self::And => "AND",
+            Self::Or => "ORR",
+            Self::Xor => "EOR",
+            Self::Ands => "ANDS",
+        };
+
+        write!(f, "{mnemonic}")
+    }
+}
+
+/// Specifies the operation of a logical operation.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShiftKind {
+    /// Logic left shift.
+    LogicLeft = 0b00,
+    /// Logic right shift.
+    LogicRight = 0b01,
+    /// Arithmethic shift right.
+    ArithRight = 0b10,
+    /// Rotate right.
+    RotateRight = 0b11,
+}
+
+impl Display for ShiftKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let frag = match self {
+            Self::LogicLeft => "LSL",
+            Self::LogicRight => "LSR",
+            Self::ArithRight => "ASR",
+            Self::RotateRight => "ROR",
+        };
+
+        write!(f, "{frag}")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Reserved(reserved::Instruction),
