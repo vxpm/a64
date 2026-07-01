@@ -1,7 +1,6 @@
 //! Data Processing - Immediate
 
 pub mod logical;
-pub mod mov_wide;
 
 use core::fmt::Display;
 
@@ -10,7 +9,7 @@ use bitos::integer::{u2, u12, u19};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{RegSp, RegUnk, RegWidth, Xr};
+use crate::{Reg, RegSp, RegUnk, RegWidth, Xr};
 
 /// Form PC-relative address, possibly to 4 KiB page
 ///
@@ -109,12 +108,68 @@ impl Display for AddSub {
     }
 }
 
+/// Specifies the behaviour of a MovWide.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MovWideKind {
+    /// Same as [`Zero`](MovWideKind::Zero), but inverts the register at the end.
+    Not = 0b00,
+    Reserved = 0b01,
+    /// Moves the 16-bit immediate and zeroes other bits.
+    Zero = 0b10,
+    /// Moves the 16-bit immediate and leaves other bits untouched.
+    Keep = 0b11,
+}
+
+/// Move wide
+///
+/// This instruction moves an optionally-shifted 16-bit immediate value to a register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MovWide {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Immediate value.
+    #[bits(5..21)]
+    pub imm: u16,
+    /// Amount by which to shift the immediate left, divided by 16.
+    #[bits(21..23)]
+    pub hw: u2,
+    /// Specifies the behaviour.
+    #[bits(29..31)]
+    pub kind: MovWideKind,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for MovWide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let suffix = match self.kind() {
+            MovWideKind::Not => "N",
+            MovWideKind::Reserved => "?",
+            MovWideKind::Zero => "Z",
+            MovWideKind::Keep => "K",
+        };
+
+        write!(
+            f,
+            "MOV{} {}, #{}, LSL #{}",
+            suffix,
+            self.rd().with_width(self.sf()),
+            self.imm(),
+            self.hw().value() * 16,
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     PcRelAddr(PcRelAddr),
     AddSub(AddSub),
     Logical(logical::Instruction),
-    MovWide(mov_wide::Instruction),
+    MovWide(MovWide),
 }
 
 impl Instruction {
@@ -130,7 +185,7 @@ impl Instruction {
                 ("__", "0110") => todo!("add sub with tags"),
                 ("__", "0111") => todo!("min max"),
                 ("__", "100_") => Self::Logical(logical::Instruction::new(value)?),
-                ("__", "101_") => Self::MovWide(mov_wide::Instruction::new(value)?),
+                ("__", "101_") => Self::MovWide(MovWide(value)),
                 ("__", "110_") => todo!("bitfield"),
                 ("__", "111_") => todo!("extract"),
                 _ => return None,
