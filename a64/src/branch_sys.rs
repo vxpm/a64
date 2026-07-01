@@ -7,7 +7,7 @@ use bitos::integer::{i14, i26, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{Reg, RegWidth};
+use crate::{Reg, RegWidth, Xr};
 
 /// Branch
 ///
@@ -28,6 +28,37 @@ impl Display for UncondBranchImm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mnemonic = if self.link() { "BL" } else { "B" };
         write!(f, "{} #{}", mnemonic, self.imm().value() * 4)
+    }
+}
+
+/// Branch
+///
+/// This instruction branches unconditionally to an address in a register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UncondBranchReg {
+    /// General purpose register containing the address to branch to.
+    #[bits(5..10)]
+    pub rn: Xr,
+    /// Whether to set X30 to PC+4. If set, also provides a hint that this instruction is a call.
+    #[bits(21)]
+    pub link: bool,
+    /// If set, provides a hint that this instruction is a return.
+    #[bits(22)]
+    pub ret: bool,
+}
+
+impl Display for UncondBranchReg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.link() {
+            "BLR"
+        } else if self.ret() {
+            "RET"
+        } else {
+            "BR"
+        };
+
+        write!(f, "{} {}", mnemonic, self.rn())
     }
 }
 
@@ -75,11 +106,29 @@ impl Display for TestBranch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    UncondBranchReg(UncondBranchReg),
     UncondBranchImm(UncondBranchImm),
     TestBranch(TestBranch),
 }
 
 impl Instruction {
+    fn new_uncond_branch_reg(value: u32) -> Option<Self> {
+        let opc = value.bits(21, 25);
+        let op2 = value.bits(16, 21);
+        let op3 = value.bits(10, 16);
+        let rn = value.bits(5, 10);
+        let op4 = value.bits(0, 5);
+
+        Some(bit_match! {
+            match (opc, op2, op3, rn, op4) {
+                ("00__", "11111", "000000", "_____", "00000") => Self::UncondBranchReg(UncondBranchReg(value)),
+                ("0100", "11111", "000000", "11111", "00000") => todo!("eret"),
+                ("0101", "11111", "000000", "11111", "00000") => todo!("drps"),
+                _ => return None,
+            }
+        })
+    }
+
     pub fn new(value: u32) -> Option<Self> {
         let op0 = value.bits(29, 32);
 
@@ -105,7 +154,7 @@ impl Instruction {
                 ("110", "0100_1____", "____", "_____") => todo!("sys reg move"),
                 ("110", "0101_01___", "____", "_____") => todo!("sys pair"),
                 ("110", "0101_1____", "____", "_____") => todo!("sys reg pair move"),
-                ("110", "1_________", "____", "_____") => todo!("uncond branch (reg)"),
+                ("110", "1_________", "____", "_____") => Self::new_uncond_branch_reg(value)?,
 
                 ("_00", "__________", "____", "_____") => Self::UncondBranchImm(UncondBranchImm(value)),
 
