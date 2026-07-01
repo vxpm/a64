@@ -50,12 +50,11 @@ pub struct UncondBranchReg {
 
 impl Display for UncondBranchReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mnemonic = if self.link() {
-            "BLR"
-        } else if self.ret() {
-            "RET"
-        } else {
-            "BR"
+        let mnemonic = match (self.link(), self.ret()) {
+            (true, true) => "????",
+            (true, false) => "BLR",
+            (false, true) => "RET",
+            (false, false) => "BR",
         };
 
         write!(f, "{} {}", mnemonic, self.rn())
