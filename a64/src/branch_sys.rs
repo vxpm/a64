@@ -1,14 +1,37 @@
 //! Branches, Exception Generating and System instructions
 
-pub mod uncond_branch_imm;
+use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::BitUtils;
+use bitos::integer::i26;
+use bitos::{BitUtils, bitos};
 use derive_more::Display;
+
+/// Branch
+///
+/// This instruction branches unconditionally to an address at a PC-relative offset, optionally
+/// setting register X30 to PC+4.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UncondBranchImm {
+    /// Offset from the address of this instruction, divided by 4.
+    #[bits(0..26)]
+    pub imm: i26,
+    /// Whether to set X30 to PC+4.
+    #[bits(31)]
+    pub link: bool,
+}
+
+impl Display for UncondBranchImm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.link() { "BL" } else { "B" };
+        write!(f, "{} #{}", mnemonic, self.imm().value() * 4)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
-    UncondBranchImm(uncond_branch_imm::Instruction),
+    UncondBranchImm(UncondBranchImm),
 }
 
 impl Instruction {
@@ -39,7 +62,7 @@ impl Instruction {
                 ("110", "0101_1____", "____", "_____") => todo!("sys reg pair move"),
                 ("110", "1_________", "____", "_____") => todo!("uncond branch (reg)"),
 
-                ("_00", "__________", "____", "_____") => Self::UncondBranchImm(uncond_branch_imm::Instruction::new(value)?),
+                ("_00", "__________", "____", "_____") => Self::UncondBranchImm(UncondBranchImm(value)),
 
                 ("_01", "0_________", "____", "_____") => todo!("cmp and branch (imm)"),
                 ("_01", "1_________", "____", "_____") => todo!("test and branch (imm)"),
