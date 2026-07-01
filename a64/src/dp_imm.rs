@@ -1,7 +1,5 @@
 //! Data Processing - Immediate
 
-pub mod logical;
-
 use core::fmt::Display;
 
 use a64_macros::bit_match;

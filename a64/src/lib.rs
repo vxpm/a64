@@ -19,6 +19,24 @@ pub enum RegWidth {
     X64,
 }
 
+impl RegWidth {
+    #[inline(always)]
+    pub fn bits(self) -> u32 {
+        match self {
+            Self::W32 => 32,
+            Self::X64 => 64,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bytes(self) -> u32 {
+        match self {
+            Self::W32 => 4,
+            Self::X64 => 8,
+        }
+    }
+}
+
 /// Enumeration of the general purpose registers. The 32nd register is considered unknown.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
