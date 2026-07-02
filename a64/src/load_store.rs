@@ -163,25 +163,43 @@ pub struct UnsignedImm {
     pub size: DataSize,
 }
 
+impl UnsignedImm {
+    pub fn width(self) -> RegWidth {
+        match (self.op(), self.size()) {
+            (UnsignedImmOp::Store, DataSize::B8) => RegWidth::W32,
+            (UnsignedImmOp::Store, DataSize::B16) => RegWidth::W32,
+            (UnsignedImmOp::Store, DataSize::B32) => RegWidth::W32,
+            (UnsignedImmOp::Store, DataSize::B64) => RegWidth::X64,
+            (UnsignedImmOp::LoadZext, DataSize::B8) => RegWidth::W32,
+            (UnsignedImmOp::LoadZext, DataSize::B16) => RegWidth::W32,
+            (UnsignedImmOp::LoadZext, DataSize::B32) => RegWidth::W32,
+            (UnsignedImmOp::LoadZext, DataSize::B64) => RegWidth::X64,
+            (UnsignedImmOp::LoadSext64, _) => RegWidth::X64,
+            (UnsignedImmOp::LoadSext32, _) => RegWidth::W32,
+        }
+    }
+}
+
 impl Display for UnsignedImm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (mnemonic, width) = match (self.op(), self.size()) {
-            (UnsignedImmOp::Store, DataSize::B8) => ("STRB", RegWidth::W32),
-            (UnsignedImmOp::Store, DataSize::B16) => ("STRH", RegWidth::W32),
-            (UnsignedImmOp::Store, DataSize::B32) => ("STR", RegWidth::W32),
-            (UnsignedImmOp::Store, DataSize::B64) => ("STR", RegWidth::X64),
-            (UnsignedImmOp::LoadZext, DataSize::B8) => ("LDRB", RegWidth::W32),
-            (UnsignedImmOp::LoadZext, DataSize::B16) => ("LDRH", RegWidth::W32),
-            (UnsignedImmOp::LoadZext, DataSize::B32) => ("LDR", RegWidth::W32),
-            (UnsignedImmOp::LoadZext, DataSize::B64) => ("LDR", RegWidth::X64),
-            (UnsignedImmOp::LoadSext64, DataSize::B8) => ("LDRSB", RegWidth::X64),
-            (UnsignedImmOp::LoadSext64, DataSize::B16) => ("LDRSH", RegWidth::X64),
-            (UnsignedImmOp::LoadSext64, DataSize::B32) => ("LDRSH", RegWidth::X64),
-            (UnsignedImmOp::LoadSext64, DataSize::B64) => ("LDR", RegWidth::X64),
-            (UnsignedImmOp::LoadSext32, DataSize::B8) => ("LDRB", RegWidth::W32),
-            (UnsignedImmOp::LoadSext32, DataSize::B16) => ("LDRH", RegWidth::W32),
-            (UnsignedImmOp::LoadSext32, DataSize::B32) => ("LDR", RegWidth::W32),
-            (UnsignedImmOp::LoadSext32, DataSize::B64) => ("????", RegWidth::W32),
+        let width = self.width();
+        let mnemonic = match (self.op(), self.size()) {
+            (UnsignedImmOp::Store, DataSize::B8) => "STRB",
+            (UnsignedImmOp::Store, DataSize::B16) => "STRH",
+            (UnsignedImmOp::Store, DataSize::B32) => "STR",
+            (UnsignedImmOp::Store, DataSize::B64) => "STR",
+            (UnsignedImmOp::LoadZext, DataSize::B8) => "LDRB",
+            (UnsignedImmOp::LoadZext, DataSize::B16) => "LDRH",
+            (UnsignedImmOp::LoadZext, DataSize::B32) => "LDR",
+            (UnsignedImmOp::LoadZext, DataSize::B64) => "LDR",
+            (UnsignedImmOp::LoadSext64, DataSize::B8) => "LDRSB",
+            (UnsignedImmOp::LoadSext64, DataSize::B16) => "LDRSH",
+            (UnsignedImmOp::LoadSext64, DataSize::B32) => "LDRSH",
+            (UnsignedImmOp::LoadSext64, DataSize::B64) => "LDR",
+            (UnsignedImmOp::LoadSext32, DataSize::B8) => "LDRB",
+            (UnsignedImmOp::LoadSext32, DataSize::B16) => "LDRH",
+            (UnsignedImmOp::LoadSext32, DataSize::B32) => "LDR",
+            (UnsignedImmOp::LoadSext32, DataSize::B64) => "????",
         };
 
         write!(
