@@ -7,39 +7,7 @@ use bitos::integer::{i7, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{MemOp, Reg, RegSp, RegWidth};
-
-/// Data size.
-#[bitos(2)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataSize {
-    B8 = 0b00,
-    B16 = 0b01,
-    B32 = 0b10,
-    B64 = 0b11,
-}
-
-impl DataSize {
-    #[inline(always)]
-    pub fn bits(self) -> u32 {
-        match self {
-            Self::B8 => 8,
-            Self::B16 => 16,
-            Self::B32 => 32,
-            Self::B64 => 64,
-        }
-    }
-
-    #[inline(always)]
-    pub fn bytes(self) -> u32 {
-        match self {
-            Self::B8 => 1,
-            Self::B16 => 2,
-            Self::B32 => 4,
-            Self::B64 => 8,
-        }
-    }
-}
+use crate::{DataSize, MemOp, Reg, RegSp, RegWidth};
 
 /// Kind of offseting done in a memory operation.
 #[bitos(2)]

@@ -11,6 +11,51 @@ use bitos::{BitUtils, bitos};
 use derive_more::Display;
 use either::Either;
 
+/// Data size.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataSize {
+    B8 = 0b00,
+    B16 = 0b01,
+    B32 = 0b10,
+    B64 = 0b11,
+}
+
+impl DataSize {
+    #[inline(always)]
+    pub fn bits(self) -> u32 {
+        match self {
+            Self::B8 => 8,
+            Self::B16 => 16,
+            Self::B32 => 32,
+            Self::B64 => 64,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bytes(self) -> u32 {
+        match self {
+            Self::B8 => 1,
+            Self::B16 => 2,
+            Self::B32 => 4,
+            Self::B64 => 8,
+        }
+    }
+}
+
+impl Display for DataSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let frag = match self {
+            Self::B8 => "B",
+            Self::B16 => "H",
+            Self::B32 => "W",
+            Self::B64 => "X",
+        };
+
+        write!(f, "{frag}")
+    }
+}
+
 /// Memory operation.
 #[bitos(1)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -3,11 +3,11 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::u6;
+use bitos::integer::{u3, u6};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{LogicalOp, Reg, RegWidth, ShiftKind};
+use crate::{DataSize, LogicalOp, Reg, RegSp, RegUnk, RegWidth, ShiftKind};
 
 /// Logical operation
 ///
@@ -68,12 +68,94 @@ impl Display for Logical {
     }
 }
 
+/// Add/subtract extended and scaled register
+///
+/// This instruction adds/subtracts a register value and a sign or zero-extended register value,
+/// followed by an optional left shift amount, and writes the result to the destination register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AddSubExt {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: RegUnk,
+    /// Source register 1.
+    #[bits(5..10)]
+    pub rn: RegSp,
+    /// Shift amount.
+    #[bits(10..13)]
+    pub imm: u3,
+    /// Size of the argument in source register 2.
+    #[bits(13..15)]
+    pub data_size: DataSize,
+    /// Whether to perform sign-extension instead of zero-extension.
+    #[bits(15)]
+    pub sign_extend: bool,
+    /// Source register 2.
+    #[bits(16..21)]
+    pub rm: Reg,
+    /// Whether to update condition flags based on the result. If set, `rd` uses ZR, otherwise SP.
+    #[bits(29)]
+    pub s: bool,
+    /// Whether this is a subtract operation.
+    #[bits(30)]
+    pub sub: bool,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for AddSubExt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.sub() { "SUB" } else { "ADD" };
+        let shift_kind = if self.sign_extend() { "S" } else { "U" };
+        let shift_amount = self.imm();
+
+        if self.s() {
+            write!(
+                f,
+                "{}S {}, {}, {}, {}XT{} #{}",
+                mnemonic,
+                self.rd().with_zr().with_width(self.sf()),
+                self.rn().with_width(self.sf()),
+                self.rm().with_width(self.sf()),
+                shift_kind,
+                self.data_size(),
+                shift_amount
+            )
+        } else {
+            write!(
+                f,
+                "{} {}, {}, {}, {}XT{} #{}",
+                mnemonic,
+                self.rd().with_sp().with_width(self.sf()),
+                self.rn().with_width(self.sf()),
+                self.rm().with_width(self.sf()),
+                shift_kind,
+                self.data_size(),
+                shift_amount
+            )
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Logical(Logical),
+    AddSubExt(AddSubExt),
 }
 
 impl Instruction {
+    pub fn new_add_sub_ext(value: u32) -> Option<Self> {
+        let opt = value.bits(22, 24);
+
+        Some(bit_match! {
+            match opt {
+                "00" => Self::AddSubExt(AddSubExt(value)),
+                "__" => return None,
+            }
+        })
+    }
+
     pub fn new(value: u32) -> Option<Self> {
         let op0 = value.bit(30) as u32;
         let op1 = value.bit(28) as u32;
@@ -86,7 +168,7 @@ impl Instruction {
                 ("1", "1", "0110", "______") => todo!("one src"),
                 ("_", "0", "0___", "______") => Self::Logical(Logical(value)),
                 ("_", "0", "1__0", "______") => todo!("add/sub (shifted reg)"),
-                ("_", "0", "1__1", "______") => todo!("add/sub (extended reg)"),
+                ("_", "0", "1__1", "______") => Self::new_add_sub_ext(value)?,
                 ("_", "1", "0000", "000000") => todo!("add/sub (with carry)"),
                 ("_", "1", "0000", "001___") => todo!("add/sub (checked ptr)"),
                 ("_", "1", "0000", "_00001") => todo!("rotate right into flags"),
@@ -95,7 +177,7 @@ impl Instruction {
                 ("_", "1", "0010", "____1_") => todo!("cond cmp (imm)"),
                 ("_", "1", "0100", "______") => todo!("cond select"),
                 ("_", "1", "1___", "______") => todo!("three src"),
-                _ => todo!(),
+                _ => return None,
             }
         })
     }
