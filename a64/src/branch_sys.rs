@@ -9,6 +9,55 @@ use derive_more::Display;
 
 use crate::{Reg, RegWidth, Xr};
 
+#[bitos(7)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HintKind {
+    Nop = 0b0000_000,
+    Yield = 0b0000_001,
+    WaitForEvent = 0b0000_010,
+    WaitForInterrupt = 0b0000_011,
+    SendEvent = 0b0000_100,
+    SendEventLocal = 0b0000_101,
+    DataGathering = 0b0000_110,
+    CSDB = 0b0010_100,
+}
+
+impl Display for HintKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self {
+            Self::Nop => "NOP",
+            Self::Yield => "YIELD",
+            Self::WaitForEvent => "WFE",
+            Self::WaitForInterrupt => "WFI",
+            Self::SendEvent => "SEV",
+            Self::SendEventLocal => "SEVL",
+            Self::DataGathering => "DGH",
+            Self::CSDB => "CSDB",
+        };
+
+        write!(f, "{mnemonic}")
+    }
+}
+
+/// Hint instruction
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hint {
+    /// The kind of hint.
+    #[bits(5..12)]
+    pub kind: Option<HintKind>,
+}
+
+impl Display for Hint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(kind) = self.kind() {
+            write!(f, "{}", kind)
+        } else {
+            write!(f, "????")
+        }
+    }
+}
+
 /// Branch
 ///
 /// This instruction branches unconditionally to an address at a PC-relative offset, optionally
@@ -140,6 +189,7 @@ impl Display for TestBranch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    Hint(Hint),
     UncondBranchReg(UncondBranchReg),
     UncondBranchImm(UncondBranchImm),
     CmpBranchImm(CmpBranchImm),
@@ -182,7 +232,7 @@ impl Instruction {
 
                 ("110", "00________", "____", "_____") => todo!("except"),
                 ("110", "0100000011", "0001", "_____") => todo!("sys with reg"),
-                ("110", "0100000011", "0010", "11111") => todo!("hints"),
+                ("110", "0100000011", "0010", "11111") => Self::Hint(Hint(value)),
                 ("110", "0100000011", "0011", "_____") => todo!("barriers"),
                 ("110", "0100000___", "0100", "_____") => todo!("pstate"),
                 ("110", "0100_01___", "____", "_____") => todo!("sys"),
