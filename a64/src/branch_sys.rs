@@ -3,7 +3,7 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::{i14, i26, u5};
+use bitos::integer::{i14, i19, i26, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
@@ -61,6 +61,41 @@ impl Display for UncondBranchReg {
     }
 }
 
+/// Compare and branch on (non)zero
+///
+/// This instruction compares the value in a register with zero, and conditionally branches to a
+/// label at a PC-relative offset if the comparison is (not )equal.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CmpBranchImm {
+    /// General purpose register to be tested.
+    #[bits(0..5)]
+    pub rt: Reg,
+    /// Offset from the address of this instruction, divided by 4.
+    #[bits(5..24)]
+    pub imm: i19,
+    /// Whether to only branch if not zero (i.e. invert the condition).
+    #[bits(24)]
+    pub not: bool,
+    /// Width of the register.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for CmpBranchImm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.not() { "CBNZ" } else { "CBZ" };
+
+        write!(
+            f,
+            "{} {}, #{}",
+            mnemonic,
+            self.rt().with_width(self.sf()),
+            self.imm().value() * 4
+        )
+    }
+}
+
 /// Test bit and branch if (non)zero
 ///
 /// This instruction compares the value of a test bit with zero, and conditionally branches to a
@@ -107,6 +142,7 @@ impl Display for TestBranch {
 pub enum Instruction {
     UncondBranchReg(UncondBranchReg),
     UncondBranchImm(UncondBranchImm),
+    CmpBranchImm(CmpBranchImm),
     TestBranch(TestBranch),
 }
 
@@ -157,7 +193,7 @@ impl Instruction {
 
                 ("_00", "__________", "____", "_____") => Self::UncondBranchImm(UncondBranchImm(value)),
 
-                ("_01", "0_________", "____", "_____") => todo!("cmp and branch (imm)"),
+                ("_01", "0_________", "____", "_____") => Self::CmpBranchImm(CmpBranchImm(value)),
                 ("_01", "1_________", "____", "_____") => Self::TestBranch(TestBranch(value)),
 
                 ("_11", "00________", "00__", "_____") => todo!("cmp regs and branch"),
