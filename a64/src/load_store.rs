@@ -7,15 +7,7 @@ use bitos::integer::{i7, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{Reg, RegSp, RegWidth};
-
-/// Memory operation.
-#[bitos(1)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Operation {
-    Store = 0b0,
-    Load = 0b1,
-}
+use crate::{MemOp, Reg, RegSp, RegWidth};
 
 /// Data size.
 #[bitos(2)]
@@ -84,7 +76,7 @@ pub struct Pair {
     pub imm: i7,
     /// Operation to perform.
     #[bits(22)]
-    pub op: Operation,
+    pub op: MemOp,
     /// Offset kind.
     #[bits(23..25)]
     pub offset_kind: OffsetKind,
@@ -99,10 +91,10 @@ impl Display for Pair {
             self.op(),
             self.offset_kind() == OffsetKind::OffsetNonTemporal,
         ) {
-            (Operation::Store, true) => "STNP",
-            (Operation::Store, false) => "STP",
-            (Operation::Load, true) => "LDNP",
-            (Operation::Load, false) => "LDP",
+            (MemOp::Store, true) => "STNP",
+            (MemOp::Store, false) => "STP",
+            (MemOp::Load, true) => "LDNP",
+            (MemOp::Load, false) => "LDP",
         };
 
         let base = self.rn().with_width(self.sf());

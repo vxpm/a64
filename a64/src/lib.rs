@@ -11,6 +11,14 @@ use bitos::{BitUtils, bitos};
 use derive_more::Display;
 use either::Either;
 
+/// Memory operation.
+#[bitos(1)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemOp {
+    Store = 0b0,
+    Load = 0b1,
+}
+
 /// Width used for accessing and manipulating the general purpose registers.
 #[bitos(1)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

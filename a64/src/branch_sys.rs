@@ -9,7 +9,7 @@ use bitos::integer::{i14, i19, i26, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{Reg, RegWidth, Xr};
+use crate::{MemOp, Reg, RegWidth, Xr};
 
 pub use system_regs::SystemReg;
 
@@ -59,6 +59,51 @@ impl Display for Hint {
             write!(f, "{}", kind)
         } else {
             write!(f, "????")
+        }
+    }
+}
+
+/// Move general-purpose register to/from system register
+///
+/// This instruction allows the PE to write/read an AArch64 System register from/to a general-purpose
+/// register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SysRegMove {
+    /// General purpose register to use in the transfer.
+    #[bits(0..5)]
+    pub rt: Xr,
+    /// The system register to use in the transfer.
+    #[bits(5..21)]
+    pub system_reg: Option<SystemReg>,
+    /// Operation to perform.
+    #[bits(21)]
+    pub op: MemOp,
+}
+
+impl Display for SysRegMove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.op() {
+            MemOp::Store => {
+                write!(f, "MSR ")?;
+
+                if let Some(reg) = self.system_reg() {
+                    write!(f, "{reg:?}, ")?;
+                } else {
+                    write!(f, "????, ")?;
+                }
+
+                write!(f, "{}", self.rt())
+            }
+            MemOp::Load => {
+                write!(f, "MRS {}, ", self.rt())?;
+
+                if let Some(reg) = self.system_reg() {
+                    write!(f, "{reg:?}")
+                } else {
+                    write!(f, "????")
+                }
+            }
         }
     }
 }
@@ -195,6 +240,7 @@ impl Display for TestBranch {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Hint(Hint),
+    SysRegMove(SysRegMove),
     UncondBranchReg(UncondBranchReg),
     UncondBranchImm(UncondBranchImm),
     CmpBranchImm(CmpBranchImm),
@@ -241,7 +287,7 @@ impl Instruction {
                 ("110", "0100000011", "0011", "_____") => todo!("barriers"),
                 ("110", "0100000___", "0100", "_____") => todo!("pstate"),
                 ("110", "0100_01___", "____", "_____") => todo!("sys"),
-                ("110", "0100_1____", "____", "_____") => todo!("sys reg move"),
+                ("110", "0100_1____", "____", "_____") => Self::SysRegMove(SysRegMove(value)),
                 ("110", "0101_01___", "____", "_____") => todo!("sys pair"),
                 ("110", "0101_1____", "____", "_____") => todo!("sys reg pair move"),
                 ("110", "1_________", "____", "_____") => Self::new_uncond_branch_reg(value)?,
