@@ -179,10 +179,10 @@ impl Display for Logical {
     }
 }
 
-/// Specifies the behaviour of a MovWide.
+/// Operation performed in a [`MovWide`] instruction.
 #[bitos(2)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MovWideKind {
+pub enum MovWideOp {
     /// Same as [`Zero`](MovWideKind::Zero), but inverts the register at the end.
     Not = 0b00,
     Reserved = 0b01,
@@ -192,7 +192,7 @@ pub enum MovWideKind {
     Keep = 0b11,
 }
 
-impl Display for MovWideKind {
+impl Display for MovWideOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mnemonic = match self {
             Self::Not => "N",
@@ -220,9 +220,9 @@ pub struct MovWide {
     /// Amount by which to shift the immediate left, divided by 16.
     #[bits(21..23)]
     pub hw: u2,
-    /// Specifies the behaviour.
+    /// Operation to perform.
     #[bits(29..31)]
-    pub kind: MovWideKind,
+    pub op: MovWideOp,
     /// Width of the registers.
     #[bits(31)]
     pub sf: RegWidth,
@@ -233,10 +233,75 @@ impl Display for MovWide {
         write!(
             f,
             "MOV{} {}, #{}, LSL #{}",
-            self.kind(),
+            self.op(),
             self.rd().with_width(self.sf()),
             self.imm(),
             self.hw().value() * 16,
+        )
+    }
+}
+
+/// Operation performed in a [`Bitfield`] instruction.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BitfieldOp {
+    /// Sign-extends the moved bitfield and the remaining lower bits are set to zero.
+    SignedMove = 0b00,
+    /// Bits outside of the moved bitfield are unchanged.
+    KeepMove = 0b01,
+    /// Zero-extends the moved bitfield and the remaining lower bits are set to zero.
+    UnsignedMove = 0b10,
+    /// Reserved.
+    Reserved = 0b11,
+}
+
+impl Display for BitfieldOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self {
+            Self::SignedMove => "SBFM",
+            Self::KeepMove => "BFM",
+            Self::UnsignedMove => "UBFM",
+            Self::Reserved => "????",
+        };
+
+        write!(f, "{mnemonic}")
+    }
+}
+
+/// Perform bitfield operation
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bitfield {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Source register.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Leftmost bit number to be moved from the source.
+    #[bits(10..16)]
+    pub imms: u6,
+    /// Right rotate amount.
+    #[bits(16..22)]
+    pub immr: u6,
+    /// Operation to perform.
+    #[bits(29..31)]
+    pub op: BitfieldOp,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for Bitfield {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {}, {}, #{}, #{}",
+            self.op(),
+            self.rd().with_width(self.sf()),
+            self.rn().with_width(self.sf()),
+            self.immr(),
+            self.imms()
         )
     }
 }
@@ -247,6 +312,7 @@ pub enum Instruction {
     AddSub(AddSub),
     Logical(Logical),
     MovWide(MovWide),
+    Bitfield(Bitfield),
 }
 
 impl Instruction {
@@ -263,7 +329,7 @@ impl Instruction {
                 ("__", "0111") => todo!("min max"),
                 ("__", "100_") => Self::Logical(Logical(value)),
                 ("__", "101_") => Self::MovWide(MovWide(value)),
-                ("__", "110_") => todo!("bitfield"),
+                ("__", "110_") => Self::Bitfield(Bitfield(value)),
                 ("__", "111_") => todo!("extract"),
                 _ => return None,
             }
