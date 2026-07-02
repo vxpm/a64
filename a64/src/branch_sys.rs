@@ -63,6 +63,74 @@ impl Display for Hint {
     }
 }
 
+/// Condition of a branch.
+#[bitos(4)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BranchCondition {
+    Equal = 0b0000,
+    NotEqual = 0b0001,
+    CarrySet = 0b0010,
+    CarryClear = 0b0011,
+    Negative = 0b0100,
+    PositiveOrZero = 0b0101,
+    Overflow = 0b0110,
+    NoOverflow = 0b0111,
+    UnsignedGreater = 0b1000,
+    UnsignedLessEqual = 0b1001,
+    SignedGreaterEqual = 0b1010,
+    SignedLess = 0b1011,
+    SignedGreater = 0b1100,
+    SignedLessEqual = 0b1101,
+    Always = 0b1110,
+    Never = 0b1111,
+}
+
+impl Display for BranchCondition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let frag = match self {
+            Self::Equal => "EQ",
+            Self::NotEqual => "NE",
+            Self::CarrySet => "CS",
+            Self::CarryClear => "CC",
+            Self::Negative => "MI",
+            Self::PositiveOrZero => "PL",
+            Self::Overflow => "VS",
+            Self::NoOverflow => "VC",
+            Self::UnsignedGreater => "HI",
+            Self::UnsignedLessEqual => "LS",
+            Self::SignedGreaterEqual => "GE",
+            Self::SignedLess => "LT",
+            Self::SignedGreater => "GT",
+            Self::SignedLessEqual => "LE",
+            Self::Always => "AL",
+            Self::Never => "NV",
+        };
+
+        write!(f, "{frag}")
+    }
+}
+
+/// Branch conditionally
+///
+/// This instruction branches conditionally to a label at a PC-relative offset. This instruction
+/// provides a hint that this is not a subroutine call or return.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CondBranch {
+    /// The condition of the branch.
+    #[bits(0..4)]
+    pub cond: BranchCondition,
+    /// Offset from the address of this instruction, divided by 4.
+    #[bits(5..24)]
+    pub imm: i19,
+}
+
+impl Display for CondBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "B.{} #{}", self.cond(), self.imm().value() * 4)
+    }
+}
+
 /// Move general-purpose register to/from system register
 ///
 /// This instruction allows the PE to write/read an AArch64 System register from/to a general-purpose
@@ -239,6 +307,7 @@ impl Display for TestBranch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    CondBranch(CondBranch),
     Hint(Hint),
     SysRegMove(SysRegMove),
     UncondBranchReg(UncondBranchReg),
@@ -276,7 +345,7 @@ impl Instruction {
 
         Some(bit_match! {
             match (op0, op1_a, op1_b, op2) {
-                ("010", "00________", "____", "_____") => todo!("cond branch (immediate)"),
+                ("010", "00________", "____", "_____") => Self::CondBranch(CondBranch(value)),
                 ("010", "01________", "____", "_____") => todo!("misc branch (immediate)"),
 
                 ("011", "00________", "1___", "_____") => todo!("cmp u8/u16 reg and branch"),
