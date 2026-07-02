@@ -316,6 +316,49 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    pub fn new_logical(value: u32) -> Option<Self> {
+        let sf = value.bit(31) as u32;
+        let n = value.bit(22) as u32;
+
+        Some(bit_match! {
+            match (sf, n) {
+                ("0", "1") => return None,
+                _ => Self::Logical(Logical(value)),
+            }
+        })
+    }
+
+    pub fn new_mov_wide(value: u32) -> Option<Self> {
+        let sf = value.bit(31) as u32;
+        let opc = value.bits(29, 31);
+        let hw = value.bits(21, 23);
+
+        Some(bit_match! {
+            match (sf, opc, hw) {
+                ("_", "01", "0_") => return None,
+                ("0", "__", "1_") => return None,
+                ("1", "01", "1_") => return None,
+                _ => Self::MovWide(MovWide(value)),
+            }
+        })
+    }
+
+    pub fn new_bitfield(value: u32) -> Option<Self> {
+        let sf = value.bit(31) as u32;
+        let opc = value.bits(29, 31);
+        let n = value.bit(22) as u32;
+
+        Some(bit_match! {
+            match (sf, opc, n) {
+                ("0", "__", "1") => return None,
+                ("0", "11", "0") => return None,
+                ("1", "__", "0") => return None,
+                ("1", "11", "1") => return None,
+                _ => Self::Bitfield(Bitfield(value)),
+            }
+        })
+    }
+
     pub fn new(value: u32) -> Option<Self> {
         let op0 = value.bits(30, 32);
         let op1 = value.bits(22, 26);
@@ -327,9 +370,9 @@ impl Instruction {
                 ("__", "010_") => Self::AddSub(AddSub(value)),
                 ("__", "0110") => todo!("add sub with tags"),
                 ("__", "0111") => todo!("min max"),
-                ("__", "100_") => Self::Logical(Logical(value)),
-                ("__", "101_") => Self::MovWide(MovWide(value)),
-                ("__", "110_") => Self::Bitfield(Bitfield(value)),
+                ("__", "100_") => Self::new_logical(value)?,
+                ("__", "101_") => Self::new_mov_wide(value)?,
+                ("__", "110_") => Self::new_bitfield(value)?,
                 ("__", "111_") => todo!("extract"),
                 _ => return None,
             }
