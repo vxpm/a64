@@ -551,7 +551,7 @@ impl Display for LogicalOp {
     }
 }
 
-/// Specifies the operation of a logical operation.
+/// Specifies a kind of shifting operation.
 #[bitos(2)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShiftKind {
@@ -617,9 +617,9 @@ fn test_app() {
     loop {
         let value = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
         if let Some(ins) = Instruction::new(value) {
-            println!("{value:08X} => {ins}");
+            println!("[{offset:08X}] {value:08X} => {ins}");
         } else {
-            println!("{value:08X} => UNKNOWN ({value:032b})");
+            println!("[{offset:08X}] {value:08X} => UNKNOWN ({value:032b})");
             panic!();
         }
 

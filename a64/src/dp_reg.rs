@@ -68,6 +68,58 @@ impl Display for Logical {
     }
 }
 
+/// Add/subtract optionally-shifted register
+///
+/// This instruction adds/subtracts a register value and an optionally-shifted register value, and
+/// writes the result to the destination register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AddSubShifted {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Source register 1.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Shift amount.
+    #[bits(10..16)]
+    pub imm: u6,
+    /// Source register 2.
+    #[bits(16..21)]
+    pub rm: Reg,
+    /// The kind of shift.
+    #[bits(22..24)]
+    pub shift: ShiftKind,
+    /// Whether to update condition flags based on the result. If set, `rd` uses ZR, otherwise SP.
+    #[bits(29)]
+    pub s: bool,
+    /// Whether this is a subtract operation.
+    #[bits(30)]
+    pub sub: bool,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for AddSubShifted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.sub() { "SUB" } else { "ADD" };
+        let flags = if self.s() { "S" } else { "" };
+
+        write!(
+            f,
+            "{}{} {}, {}, {}, {} #{}",
+            mnemonic,
+            flags,
+            self.rd().with_width(self.sf()),
+            self.rn().with_width(self.sf()),
+            self.rm().with_width(self.sf()),
+            self.shift(),
+            self.imm()
+        )
+    }
+}
+
 /// Add/subtract extended and scaled register
 ///
 /// This instruction adds/subtracts a register value and a sign or zero-extended register value,
@@ -107,7 +159,7 @@ pub struct AddSubExt {
 impl Display for AddSubExt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mnemonic = if self.sub() { "SUB" } else { "ADD" };
-        let shift_kind = if self.sign_extend() { "S" } else { "U" };
+        let shift = if self.sign_extend() { "S" } else { "U" };
         let shift_amount = self.imm();
 
         if self.s() {
@@ -118,7 +170,7 @@ impl Display for AddSubExt {
                 self.rd().with_zr().with_width(self.sf()),
                 self.rn().with_width(self.sf()),
                 self.rm().with_width(self.sf()),
-                shift_kind,
+                shift,
                 self.data_size(),
                 shift_amount
             )
@@ -130,7 +182,7 @@ impl Display for AddSubExt {
                 self.rd().with_sp().with_width(self.sf()),
                 self.rn().with_width(self.sf()),
                 self.rm().with_width(self.sf()),
-                shift_kind,
+                shift,
                 self.data_size(),
                 shift_amount
             )
@@ -141,6 +193,7 @@ impl Display for AddSubExt {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Logical(Logical),
+    AddSubShifted(AddSubShifted),
     AddSubExt(AddSubExt),
 }
 
@@ -167,7 +220,7 @@ impl Instruction {
                 ("0", "1", "0110", "______") => todo!("two src"),
                 ("1", "1", "0110", "______") => todo!("one src"),
                 ("_", "0", "0___", "______") => Self::Logical(Logical(value)),
-                ("_", "0", "1__0", "______") => todo!("add/sub (shifted reg)"),
+                ("_", "0", "1__0", "______") => Self::AddSubShifted(AddSubShifted(value)),
                 ("_", "0", "1__1", "______") => Self::new_add_sub_ext(value)?,
                 ("_", "1", "0000", "000000") => todo!("add/sub (with carry)"),
                 ("_", "1", "0000", "001___") => todo!("add/sub (checked ptr)"),
