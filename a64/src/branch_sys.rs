@@ -1,5 +1,7 @@
 //! Branches, Exception Generating and System instructions
 
+mod system_regs;
+
 use core::fmt::Display;
 
 use a64_macros::bit_match;
@@ -9,6 +11,9 @@ use derive_more::Display;
 
 use crate::{Reg, RegWidth, Xr};
 
+pub use system_regs::SystemReg;
+
+/// A kind of hint instruction.
 #[bitos(7)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HintKind {
@@ -19,7 +24,7 @@ pub enum HintKind {
     SendEvent = 0b0000_100,
     SendEventLocal = 0b0000_101,
     DataGathering = 0b0000_110,
-    CSDB = 0b0010_100,
+    SpeculativeDataBarrier = 0b0010_100,
 }
 
 impl Display for HintKind {
@@ -32,7 +37,7 @@ impl Display for HintKind {
             Self::SendEvent => "SEV",
             Self::SendEventLocal => "SEVL",
             Self::DataGathering => "DGH",
-            Self::CSDB => "CSDB",
+            Self::SpeculativeDataBarrier => "CSDB",
         };
 
         write!(f, "{mnemonic}")
