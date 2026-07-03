@@ -7,7 +7,7 @@ use bitos::integer::{i7, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, MemOp, Reg, RegSp, RegWidth};
+use crate::{DataSize, MemOp, Reg, RegSp, RegWidth, XrSp};
 
 /// Kind of offseting done in a memory operation.
 #[bitos(2)]
@@ -35,7 +35,7 @@ pub struct Pair {
     pub rt1: Reg,
     /// The general-purpose base register.
     #[bits(5..10)]
-    pub rn: RegSp,
+    pub rn: XrSp,
     /// Second general-purpose register to be transferred.
     #[bits(10..15)]
     pub rt2: Reg,
@@ -65,7 +65,7 @@ impl Display for Pair {
             (MemOp::Load, false) => "LDP",
         };
 
-        let base = self.rn().with_width(self.sf());
+        let base = self.rn();
         let imm = self.imm().value() as i16 * self.sf().bytes() as i16;
 
         let offset = match self.offset_kind() {
@@ -154,10 +154,10 @@ impl Display for UnsignedImm {
             (UnsignedImmOp::LoadZext, DataSize::B64) => "LDR",
             (UnsignedImmOp::LoadSext64, DataSize::B8) => "LDRSB",
             (UnsignedImmOp::LoadSext64, DataSize::B16) => "LDRSH",
-            (UnsignedImmOp::LoadSext64, DataSize::B32) => "LDRSH",
+            (UnsignedImmOp::LoadSext64, DataSize::B32) => "LDRSW",
             (UnsignedImmOp::LoadSext64, DataSize::B64) => "LDR",
-            (UnsignedImmOp::LoadSext32, DataSize::B8) => "LDRB",
-            (UnsignedImmOp::LoadSext32, DataSize::B16) => "LDRH",
+            (UnsignedImmOp::LoadSext32, DataSize::B8) => "LDRSB",
+            (UnsignedImmOp::LoadSext32, DataSize::B16) => "LDRSH",
             (UnsignedImmOp::LoadSext32, DataSize::B32) => "LDR",
             (UnsignedImmOp::LoadSext32, DataSize::B64) => "????",
         };

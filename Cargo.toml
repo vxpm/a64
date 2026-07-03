@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["a64", "a64-macros"]
+members = ["a64", "a64-fuzz", "a64-macros"]

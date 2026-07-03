@@ -1,0 +1,9 @@
+[package]
+name = "a64-fuzz"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+a64 = { path = "../a64" }
+rand = "0.10"
+tempfile = "3.27"

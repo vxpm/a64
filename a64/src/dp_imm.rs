@@ -3,7 +3,7 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::{u2, u6, u12, u19};
+use bitos::integer::{i21, u2, u6, u12, u19};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
@@ -31,14 +31,19 @@ pub struct PcRelAddr {
     pub to_page: bool,
 }
 
-impl Display for PcRelAddr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let imm = 0.with_bits(0, 2, self.immlo().value() as u64).with_bits(
+impl PcRelAddr {
+    pub fn imm(self) -> i21 {
+        i21::new(0.with_bits(0, 2, self.immlo().value() as u64).with_bits(
             2,
             21,
             self.immhi().value() as u64,
-        );
+        ) as i32)
+    }
+}
 
+impl Display for PcRelAddr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let imm = self.imm().value();
         if self.to_page() {
             write!(f, "ADRP {}, #{}", self.rd(), imm << 12)
         } else {
@@ -107,7 +112,7 @@ impl Display for AddSub {
 }
 
 /// Decodes the bitmask immediate of a logical operation;
-pub fn decode_logical_imm(_n: bool, imms: u6, immr: u6) -> u64 {
+pub fn decode_logical_imm(sf: bool, _n: bool, imms: u6, immr: u6) -> u64 {
     let imms = imms.value();
     let immr = immr.value();
 
@@ -132,7 +137,8 @@ pub fn decode_logical_imm(_n: bool, imms: u6, immr: u6) -> u64 {
     }
 
     let immr_mask = 0.with_bits(0, elem_size, !0);
-    pattern.rotate_right(immr as u32 & immr_mask)
+    let imm = pattern.rotate_right(immr as u32 & immr_mask);
+    if sf { imm } else { imm as u32 as u64 }
 }
 
 /// Logical operation
@@ -142,9 +148,9 @@ pub fn decode_logical_imm(_n: bool, imms: u6, immr: u6) -> u64 {
 #[bitos(32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Logical {
-    /// Destination register.
+    /// Destination register. If op is ANDS, uses ZR, otherwise SP.
     #[bits(0..5)]
-    pub rd: RegSp,
+    pub rd: RegUnk,
     /// Source register.
     #[bits(5..10)]
     pub rn: Reg,
@@ -157,7 +163,7 @@ pub struct Logical {
     /// Whether the immediate is 64 bit wide instead of 32 bit.
     #[bits(22)]
     pub n: bool,
-    /// The bitwise operation.
+    /// The bitwise operation. Dictates the 32nd value of `rd`.
     #[bits(29..31)]
     pub op: LogicalOp,
     /// Width of the registers.
@@ -167,15 +173,27 @@ pub struct Logical {
 
 impl Display for Logical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let imm = decode_logical_imm(self.n(), self.imms(), self.immr());
-        write!(
-            f,
-            "{} {}, {}, #{}",
-            self.op(),
-            self.rd().with_width(self.sf()),
-            self.rn().with_width(self.sf()),
-            imm
-        )
+        let imm = decode_logical_imm(self.sf().is_64_bits(), self.n(), self.imms(), self.immr());
+
+        if self.op() == LogicalOp::Ands {
+            write!(
+                f,
+                "{} {}, {}, #{}",
+                self.op(),
+                self.rd().with_zr().with_width(self.sf()),
+                self.rn().with_width(self.sf()),
+                imm
+            )
+        } else {
+            write!(
+                f,
+                "{} {}, {}, #{}",
+                self.op(),
+                self.rd().with_sp().with_width(self.sf()),
+                self.rn().with_width(self.sf()),
+                imm
+            )
+        }
     }
 }
 
@@ -319,10 +337,18 @@ impl Instruction {
     pub fn new_logical(value: u32) -> Option<Self> {
         let sf = value.bit(31) as u32;
         let n = value.bit(22) as u32;
+        let imms = value.bits(10, 16);
 
         Some(bit_match! {
-            match (sf, n) {
-                ("0", "1") => return None,
+            match (sf, n, imms) {
+                ("0", "1", "______") => return None,
+                ("0", "_", "111110") => return None,
+                ("_", "_", "111101") => return None,
+                ("_", "_", "111011") => return None,
+                ("_", "_", "110111") => return None,
+                ("_", "_", "101111") => return None,
+                ("_", "_", "011111") => return None,
+                ("_", "_", "111111") => return None,
                 _ => Self::Logical(Logical(value)),
             }
         })
@@ -344,9 +370,16 @@ impl Instruction {
     }
 
     pub fn new_bitfield(value: u32) -> Option<Self> {
+        let bitfield = Bitfield(value);
         let sf = value.bit(31) as u32;
         let opc = value.bits(29, 31);
         let n = value.bit(22) as u32;
+
+        if !bitfield.sf().is_64_bits()
+            && (bitfield.immr().value() >= 32 || bitfield.imms().value() >= 32)
+        {
+            return None;
+        }
 
         Some(bit_match! {
             match (sf, opc, n) {

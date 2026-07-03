@@ -74,6 +74,22 @@ pub enum RegWidth {
 
 impl RegWidth {
     #[inline(always)]
+    pub fn is_32_bits(self) -> bool {
+        match self {
+            Self::W32 => true,
+            Self::X64 => false,
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_64_bits(self) -> bool {
+        match self {
+            Self::W32 => false,
+            Self::X64 => true,
+        }
+    }
+
+    #[inline(always)]
     pub fn bits(self) -> u32 {
         match self {
             Self::W32 => 32,
@@ -375,7 +391,7 @@ pub enum WrSp {
     W28,
     W29,
     W30,
-    SP,
+    WSP,
 }
 
 impl Display for WrSp {

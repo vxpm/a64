@@ -51,8 +51,8 @@ impl Display for Logical {
             (LogicalOp::Or, false) => "ORR",
             (LogicalOp::Xor, true) => "EON",
             (LogicalOp::Xor, false) => "EOR",
-            (LogicalOp::Ands, true) => "ANDS",
-            (LogicalOp::Ands, false) => "BICS",
+            (LogicalOp::Ands, true) => "BICS",
+            (LogicalOp::Ands, false) => "ANDS",
         };
 
         write!(
@@ -198,12 +198,36 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    pub fn new_add_sub_ext(value: u32) -> Option<Self> {
-        let opt = value.bits(22, 24);
+    pub fn new_logical(value: u32) -> Option<Self> {
+        let logical = Logical(value);
+        if !logical.sf().is_64_bits() && logical.imm().value() >= 32 {
+            None
+        } else {
+            Some(Self::Logical(logical))
+        }
+    }
 
+    pub fn new_add_sub_shifted(value: u32) -> Option<Self> {
+        let add_sub = AddSubShifted(value);
+        if add_sub.shift() == ShiftKind::RotateRight {
+            None
+        } else if !add_sub.sf().is_64_bits() && add_sub.imm().value() >= 32 {
+            None
+        } else {
+            Some(Self::AddSubShifted(add_sub))
+        }
+    }
+
+    pub fn new_add_sub_ext(value: u32) -> Option<Self> {
+        let add_sub = AddSubExt(value);
+        if add_sub.imm().value() > 4 {
+            return None;
+        }
+
+        let opt = value.bits(22, 24);
         Some(bit_match! {
             match opt {
-                "00" => Self::AddSubExt(AddSubExt(value)),
+                "00" => Self::AddSubExt(add_sub),
                 "__" => return None,
             }
         })
@@ -219,8 +243,8 @@ impl Instruction {
             match (op0, op1, op2, op3) {
                 ("0", "1", "0110", "______") => todo!("two src"),
                 ("1", "1", "0110", "______") => todo!("one src"),
-                ("_", "0", "0___", "______") => Self::Logical(Logical(value)),
-                ("_", "0", "1__0", "______") => Self::AddSubShifted(AddSubShifted(value)),
+                ("_", "0", "0___", "______") => Self::new_logical(value)?,
+                ("_", "0", "1__0", "______") => Self::new_add_sub_shifted(value)?,
                 ("_", "0", "1__1", "______") => Self::new_add_sub_ext(value)?,
                 ("_", "1", "0000", "000000") => todo!("add/sub (with carry)"),
                 ("_", "1", "0000", "001___") => todo!("add/sub (checked ptr)"),
