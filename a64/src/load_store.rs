@@ -3,11 +3,11 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::{i7, u12};
+use bitos::integer::{i7, i9, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, MemOp, Reg, RegSp, RegWidth, XrSp};
+use crate::{DataSize, MemOp, Reg, RegWidth, XrSp};
 
 /// Kind of offseting done in a memory operation.
 #[bitos(2)]
@@ -85,6 +85,80 @@ impl Display for Pair {
     }
 }
 
+/// Load/store register (unscaled immediate)
+///
+/// This instruction loads/stores data of a register to/from memory. The address that is used for
+/// the operation is calculated from a base register and an immediate offset that is unscaled.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnscaledImm {
+    /// The general-purpose register to be transferred.
+    #[bits(0..5)]
+    pub rt: Reg,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rn: XrSp,
+    /// Offset in bytes.
+    #[bits(12..21)]
+    pub imm: i9,
+    /// Operation to perform.
+    #[bits(22..24)]
+    pub op: UnsignedImmOp,
+    /// Data size.
+    #[bits(30..32)]
+    pub size: DataSize,
+}
+
+impl UnscaledImm {
+    pub fn width(self) -> RegWidth {
+        match (self.op(), self.size()) {
+            (UnsignedImmOp::Store, DataSize::B8) => RegWidth::W32,
+            (UnsignedImmOp::Store, DataSize::B16) => RegWidth::W32,
+            (UnsignedImmOp::Store, DataSize::B32) => RegWidth::W32,
+            (UnsignedImmOp::Store, DataSize::B64) => RegWidth::X64,
+            (UnsignedImmOp::LoadZext, DataSize::B8) => RegWidth::W32,
+            (UnsignedImmOp::LoadZext, DataSize::B16) => RegWidth::W32,
+            (UnsignedImmOp::LoadZext, DataSize::B32) => RegWidth::W32,
+            (UnsignedImmOp::LoadZext, DataSize::B64) => RegWidth::X64,
+            (UnsignedImmOp::LoadSext64, _) => RegWidth::X64,
+            (UnsignedImmOp::LoadSext32, _) => RegWidth::W32,
+        }
+    }
+}
+
+impl Display for UnscaledImm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let width = self.width();
+        let mnemonic = match (self.op(), self.size()) {
+            (UnsignedImmOp::Store, DataSize::B8) => "STURB",
+            (UnsignedImmOp::Store, DataSize::B16) => "STURH",
+            (UnsignedImmOp::Store, DataSize::B32) => "STUR",
+            (UnsignedImmOp::Store, DataSize::B64) => "STUR",
+            (UnsignedImmOp::LoadZext, DataSize::B8) => "LDURB",
+            (UnsignedImmOp::LoadZext, DataSize::B16) => "LDURH",
+            (UnsignedImmOp::LoadZext, DataSize::B32) => "LDUR",
+            (UnsignedImmOp::LoadZext, DataSize::B64) => "LDUR",
+            (UnsignedImmOp::LoadSext64, DataSize::B8) => "LDURSB",
+            (UnsignedImmOp::LoadSext64, DataSize::B16) => "LDURSH",
+            (UnsignedImmOp::LoadSext64, DataSize::B32) => "LDURSW",
+            (UnsignedImmOp::LoadSext64, DataSize::B64) => "LDUR",
+            (UnsignedImmOp::LoadSext32, DataSize::B8) => "LDURSB",
+            (UnsignedImmOp::LoadSext32, DataSize::B16) => "LDURSH",
+            (UnsignedImmOp::LoadSext32, DataSize::B32) => "LDUR",
+            (UnsignedImmOp::LoadSext32, DataSize::B64) => "????",
+        };
+
+        write!(
+            f,
+            "{} {}, [{}, #{}]",
+            mnemonic,
+            self.rt().with_width(width),
+            self.rn(),
+            self.imm()
+        )
+    }
+}
+
 /// Operation performed in an [`UnsignedImm`] instruction.
 #[bitos(2)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +185,7 @@ pub struct UnsignedImm {
     pub rt: Reg,
     /// The general-purpose base register.
     #[bits(5..10)]
-    pub rn: RegSp,
+    pub rn: XrSp,
     /// Offset divided by data size.
     #[bits(10..22)]
     pub imm: u12,
@@ -167,7 +241,7 @@ impl Display for UnsignedImm {
             "{} {}, [{}, #{}]",
             mnemonic,
             self.rt().with_width(width),
-            self.rn().with_width(RegWidth::X64),
+            self.rn(),
             self.imm().value() as u32 * self.size().bytes()
         )
     }
@@ -176,6 +250,7 @@ impl Display for UnsignedImm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Pair(Pair),
+    UnscaledImm(UnscaledImm),
     UnsignedImm(UnsignedImm),
 }
 
@@ -198,6 +273,41 @@ impl Instruction {
 
                 ("11", "0") => todo!("sttp/ldtp"),
                 ("11", "1") => todo!("sttp/ldtp simd/fp"),
+                _ => return None,
+            }
+        })
+    }
+
+    fn new_unscaled_imm(value: u32) -> Option<Self> {
+        let size = value.bits(30, 32);
+        let vr = value.bit(26) as u32;
+        let opc = value.bits(22, 24);
+
+        Some(bit_match! {
+            match (size, vr, opc) {
+                // 8 bit
+                ("00", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
+                ("00", "1", "__") => todo!("simd 8 bit/128 bit"),
+
+                // unallocated
+                ("1_", "0", "11") => return None,
+                ("__", "1", "1_") => return None,
+
+                // 16 bit
+                ("01", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
+                ("01", "1", "__") => todo!("simd 16 bit"),
+
+                // 32 bit
+                ("10", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
+                ("10", "1", "__") => todo!("simd 32 bit"),
+
+                // prefetch
+                ("11", "0", "10") => todo!("prefetch"),
+
+                // 64 bit
+                ("11", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
+                ("11", "1", "__") => todo!("simd 64 bit"),
+
                 _ => return None,
             }
         })
@@ -280,7 +390,7 @@ impl Instruction {
 
                 ("__10", "_", "_____________", "__") => Self::new_pair(value)?,
 
-                ("__11", "_", "0__0_________", "00") => todo!("load/store reg (unscaled imm)"),
+                ("__11", "_", "0__0_________", "00") => Self::new_unscaled_imm(value)?,
                 ("__11", "_", "0__0_________", "01") => todo!("load/store reg (imm post indexed)"),
                 ("__11", "_", "0__0_________", "10") => todo!("load/store reg (unprivileged)"),
                 ("__11", "_", "0__0_________", "11") => todo!("load/store reg (imm pre indexed)"),
