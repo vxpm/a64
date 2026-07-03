@@ -3,11 +3,11 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::{u3, u6};
+use bitos::integer::{u2, u3, u6};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, LogicalOp, Reg, RegSp, RegUnk, RegWidth, ShiftKind};
+use crate::{Condition, DataSize, LogicalOp, Reg, RegSp, RegUnk, RegWidth, ShiftKind};
 
 /// Logical operation
 ///
@@ -190,11 +190,98 @@ impl Display for AddSubExt {
     }
 }
 
+/// Specifies the operation a [`CondSelect`] performs on the value coming from the second source
+/// register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CondSelectOp {
+    /// Keep the value unmodified.
+    None,
+    /// Increment the value.
+    Increment,
+    /// Invert the value.
+    Invert,
+    /// Negate the value.
+    Negate,
+    /// Reserved operation.
+    Reserved,
+}
+
+/// Conditional select
+///
+/// This instruction writes the value of the first source register to the destination register if
+/// the condition is TRUE. If the condition is FALSE, it writes the value of the second source
+/// register to the destination register, possibly modified.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CondSelect {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Source register 1.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Operation code 2.
+    #[bits(10..12)]
+    pub op2: u2,
+    /// Condition to test for selection.
+    #[bits(12..16)]
+    pub cond: Condition,
+    /// Source register 2.
+    #[bits(16..21)]
+    pub rm: Reg,
+    /// Operation code 1.
+    #[bits(30)]
+    pub op1: bool,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl CondSelect {
+    pub fn op(self) -> CondSelectOp {
+        bit_match! {
+            match (
+                self.op1() as u32,
+                self.op2().value(),
+            ) {
+                ("0", "_0") => CondSelectOp::None,
+                ("0", "_1") => CondSelectOp::Increment,
+                ("1", "_0") => CondSelectOp::Invert,
+                ("1", "_1") => CondSelectOp::Negate,
+                _ => CondSelectOp::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for CondSelect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self.op() {
+            CondSelectOp::None => "CSEL",
+            CondSelectOp::Increment => "CSINC",
+            CondSelectOp::Invert => "CSINV",
+            CondSelectOp::Negate => "CSNEG",
+            CondSelectOp::Reserved => "????",
+        };
+
+        write!(
+            f,
+            "{} {}, {}, {}, {}",
+            mnemonic,
+            self.rd().with_width(self.sf()),
+            self.rn().with_width(self.sf()),
+            self.rm().with_width(self.sf()),
+            self.cond()
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Logical(Logical),
     AddSubShifted(AddSubShifted),
     AddSubExt(AddSubExt),
+    CondSelect(CondSelect),
 }
 
 impl Instruction {
@@ -233,6 +320,19 @@ impl Instruction {
         })
     }
 
+    pub fn new_cond_select(value: u32) -> Option<Self> {
+        let s = value.bit(29) as u32;
+        let op2 = value.bits(10, 12);
+
+        Some(bit_match! {
+            match (s, op2) {
+                ("0", "1_") => return None,
+                ("1", "__") => return None,
+                _ => Self::CondSelect(CondSelect(value)),
+            }
+        })
+    }
+
     pub fn new(value: u32) -> Option<Self> {
         let op0 = value.bit(30) as u32;
         let op1 = value.bit(28) as u32;
@@ -252,7 +352,7 @@ impl Instruction {
                 ("_", "1", "0000", "__0010") => todo!("eval into flags"),
                 ("_", "1", "0010", "____0_") => todo!("cond cmp (reg)"),
                 ("_", "1", "0010", "____1_") => todo!("cond cmp (imm)"),
-                ("_", "1", "0100", "______") => todo!("cond select"),
+                ("_", "1", "0100", "______") => Self::new_cond_select(value)?,
                 ("_", "1", "1___", "______") => todo!("three src"),
                 _ => return None,
             }

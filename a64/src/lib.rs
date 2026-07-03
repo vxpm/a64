@@ -594,6 +594,53 @@ impl Display for ShiftKind {
     }
 }
 
+/// A condition.
+#[bitos(4)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Condition {
+    Equal = 0b0000,
+    NotEqual = 0b0001,
+    CarrySet = 0b0010,
+    CarryClear = 0b0011,
+    Negative = 0b0100,
+    PositiveOrZero = 0b0101,
+    Overflow = 0b0110,
+    NoOverflow = 0b0111,
+    UnsignedGreater = 0b1000,
+    UnsignedLessEqual = 0b1001,
+    SignedGreaterEqual = 0b1010,
+    SignedLess = 0b1011,
+    SignedGreater = 0b1100,
+    SignedLessEqual = 0b1101,
+    Always = 0b1110,
+    Never = 0b1111,
+}
+
+impl Display for Condition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let frag = match self {
+            Self::Equal => "EQ",
+            Self::NotEqual => "NE",
+            Self::CarrySet => "CS",
+            Self::CarryClear => "CC",
+            Self::Negative => "MI",
+            Self::PositiveOrZero => "PL",
+            Self::Overflow => "VS",
+            Self::NoOverflow => "VC",
+            Self::UnsignedGreater => "HI",
+            Self::UnsignedLessEqual => "LS",
+            Self::SignedGreaterEqual => "GE",
+            Self::SignedLess => "LT",
+            Self::SignedGreater => "GT",
+            Self::SignedLessEqual => "LE",
+            Self::Always => "AL",
+            Self::Never => "NV",
+        };
+
+        write!(f, "{frag}")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Reserved(reserved::Instruction),
