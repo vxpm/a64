@@ -64,6 +64,20 @@ pub enum MemOp {
     Load = 0b1,
 }
 
+/// Extended memory operation.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemOpExtended {
+    /// Store to memory.
+    Store = 0b00,
+    /// Load from memory and zero-extend.
+    LoadZext = 0b01,
+    /// Load from memory and sign extended to 64 bits (XR).
+    LoadSext64 = 0b10,
+    /// Load from memory and sign extended to 32 bits (WR).
+    LoadSext32 = 0b11,
+}
+
 /// Width used for accessing and manipulating the general purpose registers.
 #[bitos(1)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

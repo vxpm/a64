@@ -7,7 +7,7 @@ use bitos::integer::{i7, i9, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, MemOp, Reg, RegWidth, XrSp};
+use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, XrSp};
 
 /// Kind of offseting done in a memory operation.
 #[bitos(2)]
@@ -103,7 +103,7 @@ pub struct UnscaledImm {
     pub imm: i9,
     /// Operation to perform.
     #[bits(22..24)]
-    pub op: UnsignedImmOp,
+    pub op: MemOpExtended,
     /// Data size.
     #[bits(30..32)]
     pub size: DataSize,
@@ -112,16 +112,16 @@ pub struct UnscaledImm {
 impl UnscaledImm {
     pub fn width(self) -> RegWidth {
         match (self.op(), self.size()) {
-            (UnsignedImmOp::Store, DataSize::B8) => RegWidth::W32,
-            (UnsignedImmOp::Store, DataSize::B16) => RegWidth::W32,
-            (UnsignedImmOp::Store, DataSize::B32) => RegWidth::W32,
-            (UnsignedImmOp::Store, DataSize::B64) => RegWidth::X64,
-            (UnsignedImmOp::LoadZext, DataSize::B8) => RegWidth::W32,
-            (UnsignedImmOp::LoadZext, DataSize::B16) => RegWidth::W32,
-            (UnsignedImmOp::LoadZext, DataSize::B32) => RegWidth::W32,
-            (UnsignedImmOp::LoadZext, DataSize::B64) => RegWidth::X64,
-            (UnsignedImmOp::LoadSext64, _) => RegWidth::X64,
-            (UnsignedImmOp::LoadSext32, _) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B8) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B16) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B32) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B64) => RegWidth::X64,
+            (MemOpExtended::LoadZext, DataSize::B8) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B16) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B32) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B64) => RegWidth::X64,
+            (MemOpExtended::LoadSext64, _) => RegWidth::X64,
+            (MemOpExtended::LoadSext32, _) => RegWidth::W32,
         }
     }
 }
@@ -130,22 +130,22 @@ impl Display for UnscaledImm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let width = self.width();
         let mnemonic = match (self.op(), self.size()) {
-            (UnsignedImmOp::Store, DataSize::B8) => "STURB",
-            (UnsignedImmOp::Store, DataSize::B16) => "STURH",
-            (UnsignedImmOp::Store, DataSize::B32) => "STUR",
-            (UnsignedImmOp::Store, DataSize::B64) => "STUR",
-            (UnsignedImmOp::LoadZext, DataSize::B8) => "LDURB",
-            (UnsignedImmOp::LoadZext, DataSize::B16) => "LDURH",
-            (UnsignedImmOp::LoadZext, DataSize::B32) => "LDUR",
-            (UnsignedImmOp::LoadZext, DataSize::B64) => "LDUR",
-            (UnsignedImmOp::LoadSext64, DataSize::B8) => "LDURSB",
-            (UnsignedImmOp::LoadSext64, DataSize::B16) => "LDURSH",
-            (UnsignedImmOp::LoadSext64, DataSize::B32) => "LDURSW",
-            (UnsignedImmOp::LoadSext64, DataSize::B64) => "LDUR",
-            (UnsignedImmOp::LoadSext32, DataSize::B8) => "LDURSB",
-            (UnsignedImmOp::LoadSext32, DataSize::B16) => "LDURSH",
-            (UnsignedImmOp::LoadSext32, DataSize::B32) => "LDUR",
-            (UnsignedImmOp::LoadSext32, DataSize::B64) => "????",
+            (MemOpExtended::Store, DataSize::B8) => "STURB",
+            (MemOpExtended::Store, DataSize::B16) => "STURH",
+            (MemOpExtended::Store, DataSize::B32) => "STUR",
+            (MemOpExtended::Store, DataSize::B64) => "STUR",
+            (MemOpExtended::LoadZext, DataSize::B8) => "LDURB",
+            (MemOpExtended::LoadZext, DataSize::B16) => "LDURH",
+            (MemOpExtended::LoadZext, DataSize::B32) => "LDUR",
+            (MemOpExtended::LoadZext, DataSize::B64) => "LDUR",
+            (MemOpExtended::LoadSext64, DataSize::B8) => "LDURSB",
+            (MemOpExtended::LoadSext64, DataSize::B16) => "LDURSH",
+            (MemOpExtended::LoadSext64, DataSize::B32) => "LDURSW",
+            (MemOpExtended::LoadSext64, DataSize::B64) => "LDUR",
+            (MemOpExtended::LoadSext32, DataSize::B8) => "LDURSB",
+            (MemOpExtended::LoadSext32, DataSize::B16) => "LDURSH",
+            (MemOpExtended::LoadSext32, DataSize::B32) => "LDUR",
+            (MemOpExtended::LoadSext32, DataSize::B64) => "????",
         };
 
         write!(
@@ -157,20 +157,6 @@ impl Display for UnscaledImm {
             self.imm()
         )
     }
-}
-
-/// Operation performed in an [`UnsignedImm`] instruction.
-#[bitos(2)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UnsignedImmOp {
-    /// Store to memory.
-    Store = 0b00,
-    /// Load from memory and zero-extend.
-    LoadZext = 0b01,
-    /// Load from memory and sign extended to 64 bits (XR).
-    LoadSext64 = 0b10,
-    /// Load from memory and sign extended to 32 bits (WR).
-    LoadSext32 = 0b11,
 }
 
 /// Load/store register (unsigned immediate)
@@ -191,7 +177,7 @@ pub struct UnsignedImm {
     pub imm: u12,
     /// Operation to perform.
     #[bits(22..24)]
-    pub op: UnsignedImmOp,
+    pub op: MemOpExtended,
     /// Data size.
     #[bits(30..32)]
     pub size: DataSize,
@@ -200,16 +186,16 @@ pub struct UnsignedImm {
 impl UnsignedImm {
     pub fn width(self) -> RegWidth {
         match (self.op(), self.size()) {
-            (UnsignedImmOp::Store, DataSize::B8) => RegWidth::W32,
-            (UnsignedImmOp::Store, DataSize::B16) => RegWidth::W32,
-            (UnsignedImmOp::Store, DataSize::B32) => RegWidth::W32,
-            (UnsignedImmOp::Store, DataSize::B64) => RegWidth::X64,
-            (UnsignedImmOp::LoadZext, DataSize::B8) => RegWidth::W32,
-            (UnsignedImmOp::LoadZext, DataSize::B16) => RegWidth::W32,
-            (UnsignedImmOp::LoadZext, DataSize::B32) => RegWidth::W32,
-            (UnsignedImmOp::LoadZext, DataSize::B64) => RegWidth::X64,
-            (UnsignedImmOp::LoadSext64, _) => RegWidth::X64,
-            (UnsignedImmOp::LoadSext32, _) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B8) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B16) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B32) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B64) => RegWidth::X64,
+            (MemOpExtended::LoadZext, DataSize::B8) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B16) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B32) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B64) => RegWidth::X64,
+            (MemOpExtended::LoadSext64, _) => RegWidth::X64,
+            (MemOpExtended::LoadSext32, _) => RegWidth::W32,
         }
     }
 }
@@ -218,22 +204,22 @@ impl Display for UnsignedImm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let width = self.width();
         let mnemonic = match (self.op(), self.size()) {
-            (UnsignedImmOp::Store, DataSize::B8) => "STRB",
-            (UnsignedImmOp::Store, DataSize::B16) => "STRH",
-            (UnsignedImmOp::Store, DataSize::B32) => "STR",
-            (UnsignedImmOp::Store, DataSize::B64) => "STR",
-            (UnsignedImmOp::LoadZext, DataSize::B8) => "LDRB",
-            (UnsignedImmOp::LoadZext, DataSize::B16) => "LDRH",
-            (UnsignedImmOp::LoadZext, DataSize::B32) => "LDR",
-            (UnsignedImmOp::LoadZext, DataSize::B64) => "LDR",
-            (UnsignedImmOp::LoadSext64, DataSize::B8) => "LDRSB",
-            (UnsignedImmOp::LoadSext64, DataSize::B16) => "LDRSH",
-            (UnsignedImmOp::LoadSext64, DataSize::B32) => "LDRSW",
-            (UnsignedImmOp::LoadSext64, DataSize::B64) => "LDR",
-            (UnsignedImmOp::LoadSext32, DataSize::B8) => "LDRSB",
-            (UnsignedImmOp::LoadSext32, DataSize::B16) => "LDRSH",
-            (UnsignedImmOp::LoadSext32, DataSize::B32) => "LDR",
-            (UnsignedImmOp::LoadSext32, DataSize::B64) => "????",
+            (MemOpExtended::Store, DataSize::B8) => "STRB",
+            (MemOpExtended::Store, DataSize::B16) => "STRH",
+            (MemOpExtended::Store, DataSize::B32) => "STR",
+            (MemOpExtended::Store, DataSize::B64) => "STR",
+            (MemOpExtended::LoadZext, DataSize::B8) => "LDRB",
+            (MemOpExtended::LoadZext, DataSize::B16) => "LDRH",
+            (MemOpExtended::LoadZext, DataSize::B32) => "LDR",
+            (MemOpExtended::LoadZext, DataSize::B64) => "LDR",
+            (MemOpExtended::LoadSext64, DataSize::B8) => "LDRSB",
+            (MemOpExtended::LoadSext64, DataSize::B16) => "LDRSH",
+            (MemOpExtended::LoadSext64, DataSize::B32) => "LDRSW",
+            (MemOpExtended::LoadSext64, DataSize::B64) => "LDR",
+            (MemOpExtended::LoadSext32, DataSize::B8) => "LDRSB",
+            (MemOpExtended::LoadSext32, DataSize::B16) => "LDRSH",
+            (MemOpExtended::LoadSext32, DataSize::B32) => "LDR",
+            (MemOpExtended::LoadSext32, DataSize::B64) => "????",
         };
 
         write!(
