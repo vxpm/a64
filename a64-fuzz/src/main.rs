@@ -63,10 +63,12 @@ fn main() {
         };
 
         if let Some(instruction) = instruction {
+            // ignore because i have no clue what GAS wants
             if let a64::Instruction::DpImm(a64::dp_imm::Instruction::PcRelAddr(_)) = instruction {
                 continue;
             }
 
+            // ignore because there are still lots of unspecified system registers
             if let a64::Instruction::BranchSys(a64::branch_sys::Instruction::SysRegMove(_)) =
                 instruction
             {
