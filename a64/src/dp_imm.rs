@@ -111,19 +111,21 @@ impl Display for AddSub {
     }
 }
 
-/// Decodes the bitmask immediate of a logical operation;
-pub fn decode_logical_imm(sf: bool, _n: bool, imms: u6, immr: u6) -> u64 {
+/// Decodes the bitmask immediate of a logical operation.
+pub fn decode_logical_imm(sf: bool, n: bool, imms: u6, immr: u6) -> u64 {
     let imms = imms.value();
     let immr = immr.value();
 
+    let n = n as u32;
     let elem_size: u8 = bit_match! {
-        match imms {
-            "11110_" => 2,
-            "1110__" => 4,
-            "110___" => 8,
-            "10____" => 16,
-            "0_____" => 32,
-            "______" => 64,
+        match (n, imms) {
+            ("0", "11110_") => 2,
+            ("0", "1110__") => 4,
+            ("0", "110___") => 8,
+            ("0", "10____") => 16,
+            ("0", "0_____") => 32,
+            ("1", "______") => 64,
+            _ => 0, // invalid
         }
     };
 
@@ -342,12 +344,12 @@ impl Instruction {
         Some(bit_match! {
             match (sf, n, imms) {
                 ("0", "1", "______") => return None,
-                ("0", "_", "111110") => return None,
-                ("_", "_", "111101") => return None,
-                ("_", "_", "111011") => return None,
-                ("_", "_", "110111") => return None,
-                ("_", "_", "101111") => return None,
-                ("_", "_", "011111") => return None,
+                ("_", "0", "111110") => return None,
+                ("_", "0", "111101") => return None,
+                ("_", "0", "111011") => return None,
+                ("_", "0", "110111") => return None,
+                ("_", "0", "101111") => return None,
+                ("_", "0", "011111") => return None,
                 ("_", "_", "111111") => return None,
                 _ => Self::Logical(Logical(value)),
             }
