@@ -692,11 +692,12 @@ fn test_app() {
 
     let mut offset = main_offset;
     loop {
+        let index = offset - main_offset;
         let value = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
         if let Some(ins) = Instruction::new(value) {
-            println!("[{offset:08X}] {value:08X} => {ins}");
+            println!("[{offset:08X} / {index:04}] {value:08X} => {ins}");
         } else {
-            println!("[{offset:08X}] {value:08X} => UNKNOWN ({value:032b})");
+            println!("[{offset:08X} / {index:04}] {value:08X} => UNKNOWN ({value:032b})");
             panic!();
         }
 

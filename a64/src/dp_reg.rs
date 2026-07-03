@@ -3,7 +3,7 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::{u2, u3, u6};
+use bitos::integer::{u2, u3, u4, u5, u6};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
@@ -190,6 +190,49 @@ impl Display for AddSubExt {
     }
 }
 
+/// Conditional compare (immediate)
+///
+/// This instruction sets the value of the condition flags to the result of the comparison of a
+/// register value and a (possibly negated) immediate value if the condition is TRUE, and an
+/// immediate value otherwise.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CondCmpImm {
+    /// Flag bit specifier.
+    #[bits(0..4)]
+    pub nzcv: u4,
+    /// Source register.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Condition to test in comparison.
+    #[bits(12..16)]
+    pub cond: Condition,
+    /// Source register 2.
+    #[bits(16..21)]
+    pub imm: u5,
+    /// If set, don't negate the immediate.
+    #[bits(30)]
+    pub not_neg: bool,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl Display for CondCmpImm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.not_neg() { "CCMP" } else { "CCMN" };
+        write!(
+            f,
+            "{} {}, #{}, #{}, {}",
+            mnemonic,
+            self.rn().with_width(self.sf()),
+            self.imm(),
+            self.nzcv(),
+            self.cond()
+        )
+    }
+}
+
 /// Specifies the operation a [`CondSelect`] performs on the value coming from the second source
 /// register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,6 +324,7 @@ pub enum Instruction {
     Logical(Logical),
     AddSubShifted(AddSubShifted),
     AddSubExt(AddSubExt),
+    CondCmpImm(CondCmpImm),
     CondSelect(CondSelect),
 }
 
@@ -320,6 +364,21 @@ impl Instruction {
         })
     }
 
+    pub fn new_cond_cmp_imm(value: u32) -> Option<Self> {
+        let s = value.bit(29) as u32;
+        let op2 = value.bit(10) as u32;
+        let op3 = value.bit(4) as u32;
+
+        Some(bit_match! {
+            match (s, op2, op3) {
+                ("0", "_", "_") => return None,
+                ("1", "0", "1") => return None,
+                ("1", "1", "_") => return None,
+                _ => Self::CondCmpImm(CondCmpImm(value)),
+            }
+        })
+    }
+
     pub fn new_cond_select(value: u32) -> Option<Self> {
         let s = value.bit(29) as u32;
         let op2 = value.bits(10, 12);
@@ -351,7 +410,7 @@ impl Instruction {
                 ("_", "1", "0000", "_00001") => todo!("rotate right into flags"),
                 ("_", "1", "0000", "__0010") => todo!("eval into flags"),
                 ("_", "1", "0010", "____0_") => todo!("cond cmp (reg)"),
-                ("_", "1", "0010", "____1_") => todo!("cond cmp (imm)"),
+                ("_", "1", "0010", "____1_") => Self::new_cond_cmp_imm(value)?,
                 ("_", "1", "0100", "______") => Self::new_cond_select(value)?,
                 ("_", "1", "1___", "______") => todo!("three src"),
                 _ => return None,
