@@ -3,6 +3,7 @@ pub mod dp_imm;
 pub mod dp_reg;
 pub mod load_store;
 pub mod reserved;
+pub mod simd_fp;
 
 use core::fmt::Display;
 
@@ -661,7 +662,7 @@ pub enum Instruction {
     DpImm(dp_imm::Instruction),
     BranchSys(branch_sys::Instruction),
     DpReg(dp_reg::Instruction),
-    // SimdFp,
+    SimdFp(simd_fp::Instruction),
     LoadStore(load_store::Instruction),
 }
 
@@ -677,7 +678,7 @@ impl Instruction {
                 ("_", "100_") => Self::DpImm(dp_imm::Instruction::new(value)?),
                 ("_", "101_") => Self::BranchSys(branch_sys::Instruction::new(value)?),
                 ("_", "_101") => Self::DpReg(dp_reg::Instruction::new(value)?),
-                // ("_", "_111") => Instruction::SimdFp,
+                ("_", "_111") => Self::SimdFp(simd_fp::Instruction::new(value)?),
                 ("_", "_1_0") => Self::LoadStore(load_store::Instruction::new(value)?),
                 _ => return None,
             }
