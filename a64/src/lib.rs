@@ -121,6 +121,48 @@ impl RegWidth {
     }
 }
 
+/// Width used for accessing and manipulating the SIMD & FP registers.
+#[bitos(1)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimdRegWidth {
+    V64,
+    V128,
+}
+
+impl SimdRegWidth {
+    #[inline(always)]
+    pub fn is_64_bits(self) -> bool {
+        match self {
+            Self::V64 => true,
+            Self::V128 => false,
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_128_bits(self) -> bool {
+        match self {
+            Self::V64 => false,
+            Self::V128 => true,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bits(self) -> u32 {
+        match self {
+            Self::V64 => 64,
+            Self::V128 => 128,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bytes(self) -> u32 {
+        match self {
+            Self::V64 => 8,
+            Self::V128 => 16,
+        }
+    }
+}
+
 /// Enumeration of the general purpose registers. The 32nd register is considered unknown.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -550,6 +592,50 @@ pub enum XrSp {
 }
 
 impl Display for XrSp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+/// Enumeration of the SIMD & FP registers.
+#[bitos(5)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimdReg {
+    V0,
+    V1,
+    V2,
+    V3,
+    V4,
+    V5,
+    V6,
+    V7,
+    V8,
+    V9,
+    V10,
+    V11,
+    V12,
+    V13,
+    V14,
+    V15,
+    V16,
+    V17,
+    V18,
+    V19,
+    V20,
+    V21,
+    V22,
+    V23,
+    V24,
+    V25,
+    V26,
+    V27,
+    V28,
+    V29,
+    V30,
+    V31,
+}
+
+impl Display for SimdReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
     }

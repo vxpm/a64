@@ -1,13 +1,169 @@
 //! Scalar Floating-Point and Advanced SIMD
 
+use core::fmt::Display;
+
 use a64_macros::bit_match;
-use bitos::BitUtils;
+use bitos::integer::{u3, u4, u5};
+use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
+use crate::{SimdReg, SimdRegWidth};
+
+/// Move immediate (vector)
+///
+/// This instruction places an immediate constant into every vector element of the destination SIMD
+/// & FP register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoveImm {
+    /// The SIMD destination register.
+    #[bits(0..5)]
+    pub rd: SimdReg,
+    /// Lower bits of the immediate (d:e:f:g:h).
+    #[bits(5..10)]
+    pub immlo: u5,
+    /// Variant info.
+    #[bits(12..16)]
+    pub cmode: u4,
+    /// Higher bits of the immediate (a:b:c).
+    #[bits(16..19)]
+    pub immhi: u3,
+    /// Variant info.
+    #[bits(29)]
+    pub op: bool,
+    /// Width of the register.
+    #[bits(30)]
+    pub q: SimdRegWidth,
+}
+
+pub enum MoveImmVariant {
+    B8,
+    B16,
+    B32,
+    B32MSL,
+    B64,
+    Reserved,
+}
+
+impl MoveImm {
+    pub fn variant(self) -> MoveImmVariant {
+        let op = self.op() as u32;
+        let cmode = self.cmode().value();
+
+        bit_match! {
+            match (op, cmode) {
+                ("0", "1110") => MoveImmVariant::B8,
+                ("0", "10_0") => MoveImmVariant::B16,
+                ("0", "0__0") => MoveImmVariant::B32,
+                ("0", "110_") => MoveImmVariant::B32MSL,
+                ("1", "1110") => MoveImmVariant::B64,
+                _ => MoveImmVariant::Reserved,
+            }
+        }
+    }
+
+    pub fn imm8(self) -> u8 {
+        0.with_bits(0, 5, self.immlo().value())
+            .with_bits(5, 8, self.immhi().value())
+    }
+
+    pub fn imm64(self) -> u64 {
+        let imm = self.imm8();
+
+        let mut result = 0;
+        for i in 0..8 {
+            let byte = if imm.bit(i) { !0 } else { 0 };
+            result.set_bits(i * 8, (i + 1) * 8, byte);
+        }
+
+        result
+    }
+
+    pub fn shift_amount(self) -> u8 {
+        match self.variant() {
+            MoveImmVariant::B8 => 0,
+            MoveImmVariant::B16 => {
+                if self.cmode().bit(1) {
+                    8
+                } else {
+                    0
+                }
+            }
+            MoveImmVariant::B32 => self.cmode().bits(1, 3).value() * 8,
+            MoveImmVariant::B32MSL => {
+                if self.cmode().bit(0) {
+                    16
+                } else {
+                    8
+                }
+            }
+            MoveImmVariant::B64 => 0,
+            MoveImmVariant::Reserved => 0,
+        }
+    }
+}
+
+impl Display for MoveImm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.variant() {
+            MoveImmVariant::B8 => todo!(),
+            MoveImmVariant::B16 => todo!(),
+            MoveImmVariant::B32 => {
+                let format = if self.q().is_128_bits() { "4S" } else { "2S" };
+                write!(
+                    f,
+                    "MOVI {}.{}, #{}, LSL #{}",
+                    self.rd(),
+                    format,
+                    self.imm8(),
+                    self.shift_amount()
+                )
+            }
+            MoveImmVariant::B32MSL => todo!(),
+            MoveImmVariant::B64 => todo!(),
+            MoveImmVariant::Reserved => todo!(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
-pub enum Instruction {}
+pub enum Instruction {
+    MoveImm(MoveImm),
+}
 
 impl Instruction {
+    fn new_simd_modified_imm(value: u32) -> Option<Self> {
+        let q = value.bit(30) as u32;
+        let op1 = value.bit(29) as u32;
+        let cmode = value.bits(12, 16);
+        let op2 = value.bit(11) as u32;
+
+        Some(bit_match! {
+            match (q, op1, cmode, op2) {
+                ("_", "0", "0__0", "0") => Self::MoveImm(MoveImm(value)),
+                ("_", "0", "0__1", "0") => todo!("orr vector imm 32 bit"),
+                ("_", "0", "10_0", "0") => Self::MoveImm(MoveImm(value)),
+                ("_", "0", "10_1", "0") => todo!("orr vector imm 16 bit"),
+                ("_", "0", "110_", "0") => Self::MoveImm(MoveImm(value)),
+                ("_", "0", "1110", "0") => Self::MoveImm(MoveImm(value)),
+                ("_", "0", "1111", "0") => todo!("fmov vector imm 32 bit (single)"),
+                ("_", "0", "1111", "1") => todo!("fmov vector imm 16 bit (half)"),
+                ("_", "0", "____", "1") => return None,
+                ("_", "1", "____", "1") => return None,
+                ("_", "1", "0__0", "0") => todo!("mvni 32 bit shifted imm"),
+                ("_", "1", "0__1", "0") => todo!("bic vector imm 32 bit"),
+                ("_", "1", "10_0", "0") => todo!("mvni 16 bit shifted imm"),
+                ("_", "1", "10_1", "0") => todo!("bic vector imm 16 bit"),
+                ("_", "1", "110_", "0") => todo!("mvni 32 bit shifting ones"),
+                ("0", "1", "1110", "0") => Self::MoveImm(MoveImm(value)),
+                ("0", "1", "1111", "0") => return None,
+                ("1", "1", "1110", "0") => Self::MoveImm(MoveImm(value)),
+                ("1", "1", "1111", "0") => todo!("fmov vector imm 64 bit (double)"),
+                _ => return None,
+            }
+        })
+    }
+
     pub fn new(value: u32) -> Option<Self> {
         let op0 = value.bits(28, 32);
         let op1 = value.bits(23, 25);
@@ -48,7 +204,7 @@ impl Instruction {
                 ("0__0", "0_", "_110", "00_____", "10") => todo!("simd across lanes"),
                 ("0__0", "0_", "_1__", "_______", "00") => todo!("simd three diff"),
                 ("0__0", "0_", "_1__", "_______", "_1") => todo!("simd three same"),
-                ("0__0", "10", "0000", "_______", "_1") => todo!("simd modified imm"),
+                ("0__0", "10", "0000", "_______", "_1") => Self::new_simd_modified_imm(value)?,
                 ("0__0", "10", "____", "_______", "_1") => todo!("simd shift by imm"),
                 ("0__0", "1_", "____", "_______", "_0") => todo!("simd vector x indexed elem"),
 
