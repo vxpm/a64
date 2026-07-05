@@ -106,8 +106,21 @@ impl MoveImm {
 impl Display for MoveImm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.variant() {
-            MoveImmVariant::B8 => todo!(),
-            MoveImmVariant::B16 => todo!(),
+            MoveImmVariant::B8 => {
+                let format = if self.q().is_128_bits() { "16B" } else { "8B" };
+                write!(f, "MOVI {}.{}, #{}", self.rd(), format, self.imm8())
+            }
+            MoveImmVariant::B16 => {
+                let format = if self.q().is_128_bits() { "8H" } else { "4H" };
+                write!(
+                    f,
+                    "MOVI {}.{}, #{}, LSL #{}",
+                    self.rd(),
+                    format,
+                    self.imm8(),
+                    self.shift_amount()
+                )
+            }
             MoveImmVariant::B32 => {
                 let format = if self.q().is_128_bits() { "4S" } else { "2S" };
                 write!(
@@ -119,9 +132,22 @@ impl Display for MoveImm {
                     self.shift_amount()
                 )
             }
-            MoveImmVariant::B32MSL => todo!(),
-            MoveImmVariant::B64 => todo!(),
-            MoveImmVariant::Reserved => todo!(),
+            MoveImmVariant::B32MSL => {
+                let format = if self.q().is_128_bits() { "4S" } else { "2S" };
+                write!(
+                    f,
+                    "MOVI {}.{}, #{}, MSL #{}",
+                    self.rd(),
+                    format,
+                    self.imm8(),
+                    self.shift_amount()
+                )
+            }
+            MoveImmVariant::B64 => {
+                let format = if self.q().is_128_bits() { ".2D" } else { "" };
+                write!(f, "MOVI {}{}, #{}", self.rd(), format, self.imm64(),)
+            }
+            MoveImmVariant::Reserved => write!(f, "MOVI ????"),
         }
     }
 }
