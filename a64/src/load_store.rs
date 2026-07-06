@@ -7,7 +7,7 @@ use bitos::integer::{i7, i9, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, XrSp};
+use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, SimdReg, SimdRegScalarKind, XrSp};
 
 /// Kind of offseting done in a memory operation.
 #[bitos(2)]
@@ -80,6 +80,94 @@ impl Display for Pair {
             mnemonic,
             self.rt1().with_width(self.sf()),
             self.rt2().with_width(self.sf()),
+            offset,
+        )
+    }
+}
+
+/// Width of the scalar used in SIMD pair instructions.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimdPairWidth {
+    /// 32 bit
+    S32 = 0b00,
+    /// 64 bit
+    D64 = 0b01,
+    /// 128 bit
+    Q128 = 0b10,
+    /// Reserved.
+    Reserved = 0b11,
+}
+
+impl SimdPairWidth {
+    pub fn kind(self) -> SimdRegScalarKind {
+        match self {
+            Self::S32 => SimdRegScalarKind::S32,
+            Self::D64 => SimdRegScalarKind::D64,
+            Self::Q128 => SimdRegScalarKind::Q128,
+            Self::Reserved => SimdRegScalarKind::Q128, // whatever
+        }
+    }
+}
+
+/// Load/store pair of SIMD & FP registers
+///
+/// This instruction stores a pair of SIMD & FP registers to memory. The address used for the store
+/// is calculated from a base register value and an immediate offset.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SimdPair {
+    /// First SIMD register to be transferred.
+    #[bits(0..5)]
+    pub rt1: SimdReg,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rn: XrSp,
+    /// Second SIMD register to be transferred.
+    #[bits(10..15)]
+    pub rt2: SimdReg,
+    /// Offset divided by register width.
+    #[bits(15..22)]
+    pub imm: i7,
+    /// Operation to perform.
+    #[bits(22)]
+    pub op: MemOp,
+    /// Offset kind.
+    #[bits(23..25)]
+    pub offset_kind: OffsetKind,
+    /// Width of the scalar registers.
+    #[bits(30..32)]
+    pub opc: SimdPairWidth,
+}
+
+impl Display for SimdPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match (
+            self.op(),
+            self.offset_kind() == OffsetKind::OffsetNonTemporal,
+        ) {
+            (MemOp::Store, true) => "STNP",
+            (MemOp::Store, false) => "STP",
+            (MemOp::Load, true) => "LDNP",
+            (MemOp::Load, false) => "LDP",
+        };
+
+        let scalar_kind = self.opc().kind();
+        let base = self.rn();
+        let imm = self.imm().value() as i16 * scalar_kind.bytes() as i16;
+
+        let offset = match self.offset_kind() {
+            OffsetKind::Offset | OffsetKind::OffsetNonTemporal => &format!("[{base}, #{imm}]"),
+            OffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
+            OffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
+        };
+
+        write!(
+            f,
+            "{} {}, {}, {}",
+            mnemonic,
+            self.rt1().scalar(scalar_kind),
+            self.rt2().scalar(scalar_kind),
             offset,
         )
     }
@@ -236,6 +324,7 @@ impl Display for UnsignedImm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Pair(Pair),
+    SimdPair(SimdPair),
     UnscaledImm(UnscaledImm),
     UnsignedImm(UnsignedImm),
 }
@@ -249,13 +338,13 @@ impl Instruction {
         Some(bit_match! {
             match (opc, vr) {
                 ("00", "0") => Self::Pair(Pair(value)),
-                ("00", "1") => todo!("simd/fp 32 bit"),
+                ("00", "1") => Self::SimdPair(SimdPair(value)),
 
                 ("01", "0") if temporal => todo!("stgp/ldpsw"),
-                ("01", "1") => todo!("simd/fp 64 bit"),
+                ("01", "1") => Self::SimdPair(SimdPair(value)),
 
                 ("10", "0") => Self::Pair(Pair(value)),
-                ("10", "1") => todo!("simd/fp 128 bit"),
+                ("10", "1") => Self::SimdPair(SimdPair(value)),
 
                 ("11", "0") => todo!("sttp/ldtp"),
                 ("11", "1") => todo!("sttp/ldtp simd/fp"),

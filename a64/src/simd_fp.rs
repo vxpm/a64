@@ -7,7 +7,7 @@ use bitos::integer::{u3, u4, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{SimdReg, SimdRegWidth};
+use crate::{SimdReg, SimdRegScalar, SimdRegWidth};
 
 /// Move immediate (vector)
 ///
@@ -22,21 +22,21 @@ pub struct MoveImm {
     /// Lower bits of the immediate (d:e:f:g:h).
     #[bits(5..10)]
     pub immlo: u5,
-    /// Variant info.
+    /// Operation info.
     #[bits(12..16)]
     pub cmode: u4,
     /// Higher bits of the immediate (a:b:c).
     #[bits(16..19)]
     pub immhi: u3,
-    /// Variant info.
+    /// Operation info.
     #[bits(29)]
     pub op: bool,
-    /// Width of the register.
+    /// Width of the SIMD register.
     #[bits(30)]
     pub q: SimdRegWidth,
 }
 
-pub enum MoveImmVariant {
+pub enum MoveImmOp {
     B8,
     B16,
     B32,
@@ -46,18 +46,18 @@ pub enum MoveImmVariant {
 }
 
 impl MoveImm {
-    pub fn variant(self) -> MoveImmVariant {
+    pub fn operation(self) -> MoveImmOp {
         let op = self.op() as u32;
         let cmode = self.cmode().value();
 
         bit_match! {
             match (op, cmode) {
-                ("0", "1110") => MoveImmVariant::B8,
-                ("0", "10_0") => MoveImmVariant::B16,
-                ("0", "0__0") => MoveImmVariant::B32,
-                ("0", "110_") => MoveImmVariant::B32MSL,
-                ("1", "1110") => MoveImmVariant::B64,
-                _ => MoveImmVariant::Reserved,
+                ("0", "1110") => MoveImmOp::B8,
+                ("0", "10_0") => MoveImmOp::B16,
+                ("0", "0__0") => MoveImmOp::B32,
+                ("0", "110_") => MoveImmOp::B32MSL,
+                ("1", "1110") => MoveImmOp::B64,
+                _ => MoveImmOp::Reserved,
             }
         }
     }
@@ -80,37 +80,37 @@ impl MoveImm {
     }
 
     pub fn shift_amount(self) -> u8 {
-        match self.variant() {
-            MoveImmVariant::B8 => 0,
-            MoveImmVariant::B16 => {
+        match self.operation() {
+            MoveImmOp::B8 => 0,
+            MoveImmOp::B16 => {
                 if self.cmode().bit(1) {
                     8
                 } else {
                     0
                 }
             }
-            MoveImmVariant::B32 => self.cmode().bits(1, 3).value() * 8,
-            MoveImmVariant::B32MSL => {
+            MoveImmOp::B32 => self.cmode().bits(1, 3).value() * 8,
+            MoveImmOp::B32MSL => {
                 if self.cmode().bit(0) {
                     16
                 } else {
                     8
                 }
             }
-            MoveImmVariant::B64 => 0,
-            MoveImmVariant::Reserved => 0,
+            MoveImmOp::B64 => 0,
+            MoveImmOp::Reserved => 0,
         }
     }
 }
 
 impl Display for MoveImm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.variant() {
-            MoveImmVariant::B8 => {
+        match self.operation() {
+            MoveImmOp::B8 => {
                 let format = if self.q().is_128_bits() { "16B" } else { "8B" };
                 write!(f, "MOVI {}.{}, #{}", self.rd(), format, self.imm8())
             }
-            MoveImmVariant::B16 => {
+            MoveImmOp::B16 => {
                 let format = if self.q().is_128_bits() { "8H" } else { "4H" };
                 write!(
                     f,
@@ -121,7 +121,7 @@ impl Display for MoveImm {
                     self.shift_amount()
                 )
             }
-            MoveImmVariant::B32 => {
+            MoveImmOp::B32 => {
                 let format = if self.q().is_128_bits() { "4S" } else { "2S" };
                 write!(
                     f,
@@ -132,7 +132,7 @@ impl Display for MoveImm {
                     self.shift_amount()
                 )
             }
-            MoveImmVariant::B32MSL => {
+            MoveImmOp::B32MSL => {
                 let format = if self.q().is_128_bits() { "4S" } else { "2S" };
                 write!(
                     f,
@@ -143,11 +143,17 @@ impl Display for MoveImm {
                     self.shift_amount()
                 )
             }
-            MoveImmVariant::B64 => {
+            MoveImmOp::B64 => {
                 let format = if self.q().is_128_bits() { ".2D" } else { "" };
-                write!(f, "MOVI {}{}, #{}", self.rd(), format, self.imm64(),)
+                write!(
+                    f,
+                    "MOVI {}{}, #{}",
+                    SimdRegScalar::D64(self.rd()),
+                    format,
+                    self.imm64(),
+                )
             }
-            MoveImmVariant::Reserved => write!(f, "MOVI ????"),
+            MoveImmOp::Reserved => write!(f, "MOVI ????"),
         }
     }
 }

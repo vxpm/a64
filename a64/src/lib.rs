@@ -35,12 +35,7 @@ impl DataSize {
 
     #[inline(always)]
     pub fn bytes(self) -> u32 {
-        match self {
-            Self::B8 => 1,
-            Self::B16 => 2,
-            Self::B32 => 4,
-            Self::B64 => 8,
-        }
+        self.bits() / 8
     }
 }
 
@@ -114,52 +109,7 @@ impl RegWidth {
 
     #[inline(always)]
     pub fn bytes(self) -> u32 {
-        match self {
-            Self::W32 => 4,
-            Self::X64 => 8,
-        }
-    }
-}
-
-/// Width used for accessing and manipulating the SIMD & FP registers.
-#[bitos(1)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SimdRegWidth {
-    V64,
-    V128,
-}
-
-impl SimdRegWidth {
-    #[inline(always)]
-    pub fn is_64_bits(self) -> bool {
-        match self {
-            Self::V64 => true,
-            Self::V128 => false,
-        }
-    }
-
-    #[inline(always)]
-    pub fn is_128_bits(self) -> bool {
-        match self {
-            Self::V64 => false,
-            Self::V128 => true,
-        }
-    }
-
-    #[inline(always)]
-    pub fn bits(self) -> u32 {
-        match self {
-            Self::V64 => 64,
-            Self::V128 => 128,
-        }
-    }
-
-    #[inline(always)]
-    pub fn bytes(self) -> u32 {
-        match self {
-            Self::V64 => 8,
-            Self::V128 => 16,
-        }
+        self.bits() / 8
     }
 }
 
@@ -597,6 +547,78 @@ impl Display for XrSp {
     }
 }
 
+/// Width used for accessing and manipulating the SIMD registers.
+#[bitos(1)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimdRegWidth {
+    V64,
+    V128,
+}
+
+impl SimdRegWidth {
+    #[inline(always)]
+    pub fn is_64_bits(self) -> bool {
+        match self {
+            Self::V64 => true,
+            Self::V128 => false,
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_128_bits(self) -> bool {
+        match self {
+            Self::V64 => false,
+            Self::V128 => true,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bits(self) -> u32 {
+        match self {
+            Self::V64 => 64,
+            Self::V128 => 128,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bytes(self) -> u32 {
+        self.bits() / 8
+    }
+}
+
+/// Enumeration of scalar kinds within a SIMD register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimdRegScalarKind {
+    /// Lower 8 bits.
+    B8,
+    /// Lower 16 bits.
+    H16,
+    /// Lower 32 bits.
+    S32,
+    /// Lower 64 bits.
+    D64,
+    /// All 128 bits.
+    Q128,
+}
+
+impl SimdRegScalarKind {
+    #[inline(always)]
+    pub fn bits(self) -> u32 {
+        match self {
+            Self::B8 => 8,
+            Self::H16 => 16,
+            Self::S32 => 32,
+            Self::D64 => 64,
+            Self::Q128 => 128,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bytes(self) -> u32 {
+        self.bits() / 8
+    }
+}
+
 /// Enumeration of the SIMD & FP registers.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -638,6 +660,47 @@ pub enum SimdReg {
 impl Display for SimdReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
+    }
+}
+
+/// Enumeration of scalars within a SIMD register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimdRegScalar {
+    /// Lower 8 bits.
+    B8(SimdReg),
+    /// Lower 16 bits.
+    H16(SimdReg),
+    /// Lower 32 bits.
+    S32(SimdReg),
+    /// Lower 64 bits.
+    D64(SimdReg),
+    /// All 128 bits.
+    Q128(SimdReg),
+}
+
+impl Display for SimdRegScalar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::B8(r) => write!(f, "B{}", r as u32),
+            Self::H16(r) => write!(f, "H{}", r as u32),
+            Self::S32(r) => write!(f, "S{}", r as u32),
+            Self::D64(r) => write!(f, "D{}", r as u32),
+            Self::Q128(r) => write!(f, "Q{}", r as u32),
+        }
+    }
+}
+
+impl SimdReg {
+    /// Returns the scalar of the given kind contained within this register.
+    #[inline(always)]
+    pub fn scalar(self, kind: SimdRegScalarKind) -> SimdRegScalar {
+        match kind {
+            SimdRegScalarKind::B8 => SimdRegScalar::B8(self),
+            SimdRegScalarKind::H16 => SimdRegScalar::H16(self),
+            SimdRegScalarKind::S32 => SimdRegScalar::S32(self),
+            SimdRegScalarKind::D64 => SimdRegScalar::D64(self),
+            SimdRegScalarKind::Q128 => SimdRegScalar::Q128(self),
+        }
     }
 }
 
