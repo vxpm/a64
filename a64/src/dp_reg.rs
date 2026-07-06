@@ -9,6 +9,111 @@ use derive_more::Display;
 
 use crate::{Condition, DataSize, LogicalOp, Reg, RegSp, RegUnk, RegWidth, ShiftKind};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TwoSrcOp {
+    UnsignedDiv,
+    SignedDiv,
+    Shift,
+    Crc32,
+    Crc32C,
+    // These are all FEAT_CSSC (v8.7):
+    // SignedMax,
+    // UnsignedMax,
+    // SignedMin,
+    // UnsignedMin,
+    Reserved,
+}
+
+/// Two source operation
+///
+/// This instruction performs an operation on two source registers and writes the result to a
+/// destination register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TwoSrc {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Source register 1.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Operation info.
+    #[bits(10..16)]
+    pub opcode: u6,
+    /// Shift kind for shift operation.
+    #[bits(10..12)]
+    pub shift_kind: ShiftKind,
+    /// Size for CRC32 operation.
+    #[bits(10..12)]
+    pub sz: DataSize,
+    /// Source register 2.
+    #[bits(16..21)]
+    pub rm: Reg,
+    /// Operation info.
+    #[bits(29)]
+    pub s: bool,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl TwoSrc {
+    /// Operation to perform.
+    pub fn op(self) -> TwoSrcOp {
+        if self.s() {
+            return TwoSrcOp::Reserved;
+        }
+
+        let opcode = self.opcode().value();
+        bit_match! {
+            match opcode {
+                "000010" => TwoSrcOp::UnsignedDiv,
+                "000011" => TwoSrcOp::SignedDiv,
+                "0010__" => TwoSrcOp::Shift,
+                "010011" => TwoSrcOp::Reserved,
+                "0100__" => TwoSrcOp::Crc32,
+                "0101__" => TwoSrcOp::Crc32C,
+                // "011000" => TwoSrcOp::SignedMax,
+                // "011001" => TwoSrcOp::UnsignedMax,
+                // "011010" => TwoSrcOp::SignedMin,
+                // "011011" => TwoSrcOp::UnsignedMin,
+                _ => TwoSrcOp::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for TwoSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self.op() {
+            TwoSrcOp::UnsignedDiv => "UDIV",
+            TwoSrcOp::SignedDiv => "SDIV",
+            TwoSrcOp::Shift => match self.shift_kind() {
+                ShiftKind::LogicLeft => "LSLV",
+                ShiftKind::LogicRight => "LSRV",
+                ShiftKind::ArithRight => "ASRV",
+                ShiftKind::RotateRight => "RORV",
+            },
+            TwoSrcOp::Crc32 => &format!("CRC32{}", self.sz()),
+            TwoSrcOp::Crc32C => &format!("CRC32C{}", self.sz()),
+            // TwoSrcOp::SignedMax => "SMAX",
+            // TwoSrcOp::UnsignedMax => "UMAX",
+            // TwoSrcOp::SignedMin => "SMIN",
+            // TwoSrcOp::UnsignedMin => "UMIN",
+            TwoSrcOp::Reserved => "????",
+        };
+
+        write!(
+            f,
+            "{} {}, {}, {}",
+            mnemonic,
+            self.rd().with_width(self.sf()),
+            self.rn().with_width(self.sf()),
+            self.rm().with_width(self.sf()),
+        )
+    }
+}
+
 /// Logical operation
 ///
 /// This instruction performs a bitwise operation between a register value and an optionally-shifted
@@ -321,6 +426,7 @@ impl Display for CondSelect {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    TwoSrc(TwoSrc),
     Logical(Logical),
     AddSubShifted(AddSubShifted),
     AddSubExt(AddSubExt),
@@ -329,6 +435,37 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    pub fn new_two_src(value: u32) -> Option<Self> {
+        let s = value.bit(29);
+        if s {
+            return None;
+        }
+
+        let sf = value.bit(31) as u32;
+        let opcode = value.bits(10, 16);
+        Some(bit_match! {
+            match (sf, opcode) {
+                // udiv/sdiv
+                ("_", "000010") => Self::TwoSrc(TwoSrc(value)),
+                ("_", "000011") => Self::TwoSrc(TwoSrc(value)),
+
+                // shift
+                ("_", "0010__") => Self::TwoSrc(TwoSrc(value)),
+
+                // crc32
+                ("0", "010011") => return None,
+                ("0", "0100__") => Self::TwoSrc(TwoSrc(value)),
+                ("1", "010011") => Self::TwoSrc(TwoSrc(value)),
+
+                // crc32c
+                ("0", "010111") => return None,
+                ("0", "0101__") => Self::TwoSrc(TwoSrc(value)),
+                ("1", "010111") => Self::TwoSrc(TwoSrc(value)),
+                _ => return None,
+            }
+        })
+    }
+
     pub fn new_logical(value: u32) -> Option<Self> {
         let logical = Logical(value);
         if !logical.sf().is_64_bits() && logical.imm().value() >= 32 {
@@ -400,7 +537,7 @@ impl Instruction {
 
         Some(bit_match! {
             match (op0, op1, op2, op3) {
-                ("0", "1", "0110", "______") => todo!("two src"),
+                ("0", "1", "0110", "______") => Self::new_two_src(value)?,
                 ("1", "1", "0110", "______") => todo!("one src"),
                 ("_", "0", "0___", "______") => Self::new_logical(value)?,
                 ("_", "0", "1__0", "______") => Self::new_add_sub_shifted(value)?,

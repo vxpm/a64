@@ -21,8 +21,13 @@ impl Context {
         std::mem::drop(writer);
 
         let mut cmd = Command::new("aarch64-linux-gnu-as");
-        cmd.args(["-", "-o", self.tmp.path().to_str().unwrap()])
-            .stdin(reader);
+        cmd.args([
+            "-mcpu=cortex-a57",
+            "-",
+            "-o",
+            self.tmp.path().to_str().unwrap(),
+        ])
+        .stdin(reader);
 
         let result = cmd.output().unwrap();
         if !result.status.success() {
