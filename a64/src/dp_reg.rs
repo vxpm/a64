@@ -461,11 +461,7 @@ impl Display for ThreeSrcOp {
 
 impl ThreeSrcOp {
     pub fn uses_ra(self) -> bool {
-        match self {
-            Self::SignedMulHigh => false,
-            Self::UnsignedMulHigh => false,
-            _ => true,
-        }
+        !matches!(self, Self::SignedMulHigh | Self::UnsignedMulHigh)
     }
 }
 
@@ -604,8 +600,10 @@ impl Instruction {
     pub fn new_add_sub_shifted(value: u32) -> Option<Self> {
         let add_sub = AddSubShifted(value);
         if add_sub.shift() == ShiftKind::RotateRight {
+            // invalid
             None
         } else if !add_sub.sf().is_64_bits() && add_sub.imm().value() >= 32 {
+            // breaks invariant
             None
         } else {
             Some(Self::AddSubShifted(add_sub))

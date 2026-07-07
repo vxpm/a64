@@ -157,19 +157,19 @@ impl RegUnk {
     #[inline(always)]
     pub fn with_width(self, width: RegWidth) -> Either<WrUnk, XrUnk> {
         match width {
-            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute(self) }),
-            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute(self) }),
+            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute::<Self, WrUnk>(self) }),
+            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute::<Self, XrUnk>(self) }),
         }
     }
 
     #[inline(always)]
     pub fn with_zr(self) -> Reg {
-        unsafe { std::mem::transmute(self) }
+        unsafe { std::mem::transmute::<Self, Reg>(self) }
     }
 
     #[inline(always)]
     pub fn with_sp(self) -> RegSp {
-        unsafe { std::mem::transmute(self) }
+        unsafe { std::mem::transmute::<Self, RegSp>(self) }
     }
 }
 
@@ -215,8 +215,8 @@ impl Reg {
     #[inline(always)]
     pub fn with_width(self, width: RegWidth) -> Either<Wr, Xr> {
         match width {
-            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute(self) }),
-            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute(self) }),
+            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute::<Self, Wr>(self) }),
+            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute::<Self, Xr>(self) }),
         }
     }
 }
@@ -263,8 +263,8 @@ impl RegSp {
     #[inline(always)]
     pub fn with_width(self, width: RegWidth) -> Either<WrSp, XrSp> {
         match width {
-            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute(self) }),
-            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute(self) }),
+            RegWidth::W32 => Either::Left(unsafe { std::mem::transmute::<Self, WrSp>(self) }),
+            RegWidth::X64 => Either::Right(unsafe { std::mem::transmute::<Self, XrSp>(self) }),
         }
     }
 }
@@ -311,13 +311,13 @@ impl WrUnk {
     #[inline(always)]
     pub fn with_zr(self) -> Wr {
         // SAFETY: both are C-like enums with the same amount of variants
-        unsafe { std::mem::transmute(self) }
+        unsafe { std::mem::transmute::<Self, Wr>(self) }
     }
 
     #[inline(always)]
     pub fn with_sp(self) -> WrSp {
         // SAFETY: both are C-like enums with the same amount of variants
-        unsafe { std::mem::transmute(self) }
+        unsafe { std::mem::transmute::<Self, WrSp>(self) }
     }
 }
 
@@ -451,13 +451,13 @@ impl XrUnk {
     #[inline(always)]
     pub fn with_zr(self) -> Xr {
         // SAFETY: both are C-like enums with the same amount of variants
-        unsafe { std::mem::transmute(self) }
+        unsafe { std::mem::transmute::<Self, Xr>(self) }
     }
 
     #[inline(always)]
     pub fn with_sp(self) -> XrSp {
         // SAFETY: both are C-like enums with the same amount of variants
-        unsafe { std::mem::transmute(self) }
+        unsafe { std::mem::transmute::<Self, XrSp>(self) }
     }
 }
 

@@ -51,7 +51,7 @@ fn expand(pattern: &str, out: &mut Vec<Pattern>) {
     }
 }
 
-fn compress(seq: &Vec<Pattern>) -> Vec<Pattern> {
+fn compress(seq: &[Pattern]) -> Vec<Pattern> {
     let mut result = Vec::new();
     for pat in seq.iter().copied() {
         match pat {
