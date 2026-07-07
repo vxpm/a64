@@ -103,12 +103,17 @@ impl Display for TwoSrc {
             TwoSrcOp::Reserved => "????",
         };
 
+        let rd_rn_width = match self.op() {
+            TwoSrcOp::Crc32 | TwoSrcOp::Crc32C => RegWidth::W32,
+            _ => self.sf(),
+        };
+
         write!(
             f,
             "{} {}, {}, {}",
             mnemonic,
-            self.rd().with_width(self.sf()),
-            self.rn().with_width(self.sf()),
+            self.rd().with_width(rd_rn_width),
+            self.rn().with_width(rd_rn_width),
             self.rm().with_width(self.sf()),
         )
     }

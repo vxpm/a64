@@ -321,12 +321,71 @@ impl Display for UnsignedImm {
     }
 }
 
+/// Load/store SIMD register (unsigned immediate)
+///
+/// This instruction loads/stores data of a SIMD register to/from memory. The address that is used
+/// for the operation is calculated from a base register and an immediate offset.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SimdUnsignedImm {
+    /// The general-purpose register to be transferred.
+    #[bits(0..5)]
+    pub rt: SimdReg,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rn: XrSp,
+    /// Offset divided by data size.
+    #[bits(10..22)]
+    pub imm: u12,
+    /// Operation to perform.
+    #[bits(22)]
+    pub op: MemOp,
+    /// Whether to use Q128.
+    #[bits(23)]
+    pub opc: bool,
+    /// Data size.
+    #[bits(30..32)]
+    pub size: DataSize,
+}
+
+impl SimdUnsignedImm {
+    pub fn scalar_kind(self) -> SimdRegScalarKind {
+        match (self.size(), self.opc()) {
+            (DataSize::B8, false) => SimdRegScalarKind::B8,
+            (DataSize::B16, false) => SimdRegScalarKind::H16,
+            (DataSize::B32, false) => SimdRegScalarKind::S32,
+            (DataSize::B64, false) => SimdRegScalarKind::D64,
+            (_, true) => SimdRegScalarKind::Q128,
+        }
+    }
+}
+
+impl Display for SimdUnsignedImm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let scalar_kind = self.scalar_kind();
+        let mnemonic = match self.op() {
+            MemOp::Store => "STR",
+            MemOp::Load => "LDR",
+        };
+
+        write!(
+            f,
+            "{} {}, [{}, #{}]",
+            mnemonic,
+            self.rt().scalar(scalar_kind),
+            self.rn(),
+            self.imm().value() as u32 * scalar_kind.bytes()
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     Pair(Pair),
     SimdPair(SimdPair),
     UnscaledImm(UnscaledImm),
     UnsignedImm(UnsignedImm),
+    SimdUnsignedImm(SimdUnsignedImm),
 }
 
 impl Instruction {
@@ -397,7 +456,7 @@ impl Instruction {
             match (size, vr, opc) {
                 // 8 bit
                 ("00", "0", "__") => Self::UnsignedImm(UnsignedImm(value)),
-                ("00", "1", "__") => todo!("simd 8 bit/128 bit"),
+                ("00", "1", "__") => Self::SimdUnsignedImm(SimdUnsignedImm(value)),
 
                 // unallocated
                 ("1_", "0", "11") => return None,
@@ -405,18 +464,18 @@ impl Instruction {
 
                 // 16 bit
                 ("01", "0", "__") => Self::UnsignedImm(UnsignedImm(value)),
-                ("01", "1", "__") => todo!("simd 16 bit"),
+                ("01", "1", "__") => Self::SimdUnsignedImm(SimdUnsignedImm(value)),
 
                 // 32 bit
                 ("10", "0", "__") => Self::UnsignedImm(UnsignedImm(value)),
-                ("10", "1", "__") => todo!("simd 32 bit"),
+                ("10", "1", "__") => Self::SimdUnsignedImm(SimdUnsignedImm(value)),
 
                 // prefetch
                 ("11", "0", "10") => todo!("prefetch"),
 
                 // 64 bit
                 ("11", "0", "__") => Self::UnsignedImm(UnsignedImm(value)),
-                ("11", "1", "__") => todo!("simd 64 bit"),
+                ("11", "1", "__") => Self::SimdUnsignedImm(SimdUnsignedImm(value)),
 
                 _ => return None,
             }
