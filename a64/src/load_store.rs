@@ -591,7 +591,11 @@ impl Instruction {
         let size = value.bits(30, 32);
         let vr = value.bit(26) as u32;
         let opc = value.bits(22, 24);
+
         let option = value.bits(13, 16);
+        if !matches!(option, 0b010 | 0b011 | 0b110 | 0b111) {
+            return None;
+        }
 
         Some(bit_match! {
             match (size, vr, opc) {
