@@ -53,37 +53,38 @@ pub struct Pair {
     pub sf: RegWidth,
 }
 
+impl Pair {
+    pub fn mnemonic(self) -> &'static str {
+        match (self.op(), self.offset_kind()) {
+            (MemOp::Store, PairOffsetKind::OffsetNonTemporal) => "STNP",
+            (MemOp::Store, _) => "STP",
+            (MemOp::Load, PairOffsetKind::OffsetNonTemporal) => "LDNP",
+            (MemOp::Load, _) => "LDP",
+        }
+    }
+}
+
 impl Display for Pair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mnemonic = match (
-            self.op(),
-            self.offset_kind() == PairOffsetKind::OffsetNonTemporal,
-        ) {
-            (MemOp::Store, true) => "STNP",
-            (MemOp::Store, false) => "STP",
-            (MemOp::Load, true) => "LDNP",
-            (MemOp::Load, false) => "LDP",
-        };
-
-        let base = self.rn();
-        let imm = self.imm().value() as i16 * self.sf().bytes() as i16;
-
-        let offset = match self.offset_kind() {
-            PairOffsetKind::Offset | PairOffsetKind::OffsetNonTemporal => {
-                &format!("[{base}, #{imm}]")
-            }
-            PairOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
-            PairOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
-        };
+        let mnemonic = self.mnemonic();
 
         write!(
             f,
-            "{} {}, {}, {}",
+            "{} {}, {}, ",
             mnemonic,
             self.rt1().with_width(self.sf()),
             self.rt2().with_width(self.sf()),
-            offset,
-        )
+        )?;
+
+        let base = self.rn();
+        let imm = self.imm().value() as i16 * self.sf().bytes() as i16;
+        match self.offset_kind() {
+            PairOffsetKind::Offset | PairOffsetKind::OffsetNonTemporal => {
+                write!(f, "[{base}, #{imm}]")
+            }
+            PairOffsetKind::PreIndexed => write!(f, "[{base}, #{imm}]!"),
+            PairOffsetKind::PostIndexed => write!(f, "[{base}], #{imm}"),
+        }
     }
 }
 
@@ -142,38 +143,39 @@ pub struct SimdPair {
     pub opc: SimdPairWidth,
 }
 
+impl SimdPair {
+    pub fn mnemonic(self) -> &'static str {
+        match (self.op(), self.offset_kind()) {
+            (MemOp::Store, PairOffsetKind::OffsetNonTemporal) => "STNP",
+            (MemOp::Store, _) => "STP",
+            (MemOp::Load, PairOffsetKind::OffsetNonTemporal) => "LDNP",
+            (MemOp::Load, _) => "LDP",
+        }
+    }
+}
+
 impl Display for SimdPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mnemonic = match (
-            self.op(),
-            self.offset_kind() == PairOffsetKind::OffsetNonTemporal,
-        ) {
-            (MemOp::Store, true) => "STNP",
-            (MemOp::Store, false) => "STP",
-            (MemOp::Load, true) => "LDNP",
-            (MemOp::Load, false) => "LDP",
-        };
-
         let scalar_kind = self.opc().kind();
-        let base = self.rn();
-        let imm = self.imm().value() as i16 * scalar_kind.bytes() as i16;
-
-        let offset = match self.offset_kind() {
-            PairOffsetKind::Offset | PairOffsetKind::OffsetNonTemporal => {
-                &format!("[{base}, #{imm}]")
-            }
-            PairOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
-            PairOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
-        };
+        let mnemonic = self.mnemonic();
 
         write!(
             f,
-            "{} {}, {}, {}",
+            "{} {}, {}, ",
             mnemonic,
             self.rt1().scalar(scalar_kind),
             self.rt2().scalar(scalar_kind),
-            offset,
-        )
+        )?;
+
+        let base = self.rn();
+        let imm = self.imm().value() as i16 * scalar_kind.bytes() as i16;
+        match self.offset_kind() {
+            PairOffsetKind::Offset | PairOffsetKind::OffsetNonTemporal => {
+                write!(f, "[{base}, #{imm}]")
+            }
+            PairOffsetKind::PreIndexed => write!(f, "[{base}, #{imm}]!"),
+            PairOffsetKind::PostIndexed => write!(f, "[{base}], #{imm}"),
+        }
     }
 }
 
@@ -301,24 +303,17 @@ impl Display for Single {
         let width = self.width();
         let mnemonic = self.mnemonic();
 
+        write!(f, "{} {}, ", mnemonic, self.rt().with_width(width),)?;
+
         let base = self.rn();
         let imm = self.imm();
-
-        let offset = match self.offset_kind() {
+        match self.offset_kind() {
             SingleOffsetKind::UnscaledOffset | SingleOffsetKind::UnscaledOffsetUnprivileged => {
-                &format!("[{base}, #{imm}]")
+                write!(f, "[{base}, #{imm}]")
             }
-            SingleOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
-            SingleOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
-        };
-
-        write!(
-            f,
-            "{} {}, {}",
-            mnemonic,
-            self.rt().with_width(width),
-            offset
-        )
+            SingleOffsetKind::PreIndexed => write!(f, "[{base}, #{imm}]!"),
+            SingleOffsetKind::PostIndexed => write!(f, "[{base}], #{imm}"),
+        }
     }
 }
 
@@ -383,24 +378,17 @@ impl Display for SimdSingle {
         let scalar_kind = self.scalar_kind();
         let mnemonic = self.mnemonic();
 
+        write!(f, "{} {}, ", mnemonic, self.rt().scalar(scalar_kind),)?;
+
         let base = self.rn();
         let imm = self.imm();
-
-        let offset = match self.offset_kind() {
+        match self.offset_kind() {
             SingleOffsetKind::UnscaledOffset | SingleOffsetKind::UnscaledOffsetUnprivileged => {
-                &format!("[{base}, #{imm}]")
+                write!(f, "[{base}, #{imm}]")
             }
-            SingleOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
-            SingleOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
-        };
-
-        write!(
-            f,
-            "{} {}, {}",
-            mnemonic,
-            self.rt().scalar(scalar_kind),
-            offset,
-        )
+            SingleOffsetKind::PreIndexed => write!(f, "[{base}, #{imm}]!"),
+            SingleOffsetKind::PostIndexed => write!(f, "[{base}], #{imm}"),
+        }
     }
 }
 
