@@ -9,6 +9,61 @@ use derive_more::Display;
 
 use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, SimdReg, SimdRegScalarKind, XrSp};
 
+/// Load-acquire/store-release register
+///
+/// This instruction loads/stores from/to a 32-bit register from/to a memory location. The
+/// instruction also has memory ordering semantics as described in Load-Acquire, Store-Release.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ordered {
+    /// The general-purpose register to be transferred.
+    #[bits(0..5)]
+    pub rt: Reg,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rn: XrSp,
+    /// Operation to perform.
+    #[bits(22)]
+    pub op: MemOp,
+    /// Data size.
+    #[bits(30..32)]
+    pub size: DataSize,
+}
+
+impl Ordered {
+    pub fn width(self) -> RegWidth {
+        match self.size() {
+            DataSize::B64 => RegWidth::X64,
+            _ => RegWidth::W32,
+        }
+    }
+
+    pub fn mnemonic(self) -> &'static str {
+        match (self.size(), self.op()) {
+            (DataSize::B8, MemOp::Store) => "STLRB",
+            (DataSize::B8, MemOp::Load) => "LDARB",
+            (DataSize::B16, MemOp::Store) => "STLRH",
+            (DataSize::B16, MemOp::Load) => "LDARH",
+            (DataSize::B32, MemOp::Store) => "STLR",
+            (DataSize::B32, MemOp::Load) => "LDAR",
+            (DataSize::B64, MemOp::Store) => "STLR",
+            (DataSize::B64, MemOp::Load) => "LDAR",
+        }
+    }
+}
+
+impl Display for Ordered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {}, [{}]",
+            self.mnemonic(),
+            self.rt().with_width(self.width()),
+            self.rn()
+        )
+    }
+}
+
 /// Kind of offseting done in a pair memory operation.
 #[bitos(2)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -723,18 +778,26 @@ impl Display for SimdUnsignedImm {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    Ordered(Ordered),
     Pair(Pair),
     SimdPair(SimdPair),
     Single(Single),
     SimdSingle(SimdSingle),
-    // UnscaledImm(UnscaledImm),
-    // SimdUnscaledImm(SimdUnscaledImm),
     RegOffset(RegOffset),
     UnsignedImm(UnsignedImm),
     SimdUnsignedImm(SimdUnsignedImm),
 }
 
 impl Instruction {
+    fn new_ordered(value: u32) -> Option<Self> {
+        let op0 = value.bit(15);
+        if op0 {
+            Some(Self::Ordered(Ordered(value)))
+        } else {
+            None
+        }
+    }
+
     fn new_pair(value: u32) -> Option<Self> {
         let opc = value.bits(30, 32);
         let vr = value.bit(26) as u32;
@@ -911,7 +974,7 @@ impl Instruction {
                 ("1_00", "0", "11_0_________", "__") => todo!("compare and swap (unprivileged)"),
 
                 ("__00", "0", "00_0_________", "__") => todo!("load/store exclusive reg"),
-                ("__00", "0", "01_0_________", "__") => todo!("load/store ordered"),
+                ("__00", "0", "01_0_________", "__") => Self::new_ordered(value)?,
                 ("__00", "0", "01_1_________", "__") => todo!("compare and swap"),
 
                 ("__01", "0", "10_0_________", "10") => todo!("load/store ordered register pair"),
