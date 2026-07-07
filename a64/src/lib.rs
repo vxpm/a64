@@ -1,3 +1,5 @@
+#![allow(clippy::unusual_byte_groupings)]
+
 pub mod branch_sys;
 pub mod dp_imm;
 pub mod dp_reg;

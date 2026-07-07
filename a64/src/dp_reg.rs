@@ -428,6 +428,127 @@ impl Display for CondSelect {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreeSrcOp {
+    MulAdd,
+    MulSub,
+    SignedMulAddLong,
+    SignedMulSubLong,
+    SignedMulHigh,
+    UnsignedMulAddLong,
+    UnsignedMulSubLong,
+    UnsignedMulHigh,
+    Reserved,
+}
+
+impl Display for ThreeSrcOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self {
+            Self::MulAdd => "MADD",
+            Self::MulSub => "MSUB",
+            Self::SignedMulAddLong => "SMADDL",
+            Self::SignedMulSubLong => "SMSUBL",
+            Self::SignedMulHigh => "SMULH",
+            Self::UnsignedMulAddLong => "UMADDL",
+            Self::UnsignedMulSubLong => "UMSUBL",
+            Self::UnsignedMulHigh => "UMULH",
+            Self::Reserved => "????",
+        };
+
+        write!(f, "{mnemonic}")
+    }
+}
+
+impl ThreeSrcOp {
+    pub fn uses_ra(self) -> bool {
+        match self {
+            Self::SignedMulHigh => false,
+            Self::UnsignedMulHigh => false,
+            _ => true,
+        }
+    }
+}
+
+/// Three source operation
+///
+/// This instruction performs an operation on three source registers and writes the result to a
+/// destination register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThreeSrc {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Source register 1.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Source register 3.
+    #[bits(10..15)]
+    pub ra: Reg,
+    /// Operation info.
+    #[bits(15)]
+    pub op0: bool,
+    /// Source register 2.
+    #[bits(16..21)]
+    pub rm: Reg,
+    /// Operation info.
+    #[bits(21..24)]
+    pub op31: u3,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl ThreeSrc {
+    pub fn op(self) -> ThreeSrcOp {
+        let op31 = self.op31().value();
+        let op0 = self.op0() as u32;
+
+        bit_match! {
+            match (op31, op0) {
+                ("000", "0") => ThreeSrcOp::MulAdd,
+                ("000", "1") => ThreeSrcOp::MulSub,
+                ("001", "0") => ThreeSrcOp::SignedMulAddLong,
+                ("001", "1") => ThreeSrcOp::SignedMulSubLong,
+                ("010", "0") => ThreeSrcOp::SignedMulHigh,
+                ("101", "0") => ThreeSrcOp::UnsignedMulAddLong,
+                ("101", "1") => ThreeSrcOp::UnsignedMulSubLong,
+                ("110", "0") => ThreeSrcOp::UnsignedMulHigh,
+                _ => ThreeSrcOp::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for ThreeSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op = self.op();
+
+        let n_m_width = match op {
+            ThreeSrcOp::SignedMulAddLong => RegWidth::W32,
+            ThreeSrcOp::SignedMulSubLong => RegWidth::W32,
+            ThreeSrcOp::UnsignedMulAddLong => RegWidth::W32,
+            ThreeSrcOp::UnsignedMulSubLong => RegWidth::W32,
+            _ => self.sf(),
+        };
+
+        write!(
+            f,
+            "{} {}, {}, {}",
+            self.op(),
+            self.rd().with_width(self.sf()),
+            self.rn().with_width(n_m_width),
+            self.rm().with_width(n_m_width),
+        )?;
+
+        if op.uses_ra() {
+            write!(f, ", {}", self.ra().with_width(self.sf()))?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     TwoSrc(TwoSrc),
@@ -436,6 +557,7 @@ pub enum Instruction {
     AddSubExt(AddSubExt),
     CondCmpImm(CondCmpImm),
     CondSelect(CondSelect),
+    ThreeSrc(ThreeSrc),
 }
 
 impl Instruction {
@@ -533,6 +655,29 @@ impl Instruction {
         })
     }
 
+    pub fn new_three_src(value: u32) -> Option<Self> {
+        let sf = value.bit(31) as u32;
+        let op54 = value.bits(29, 31);
+        let op31 = value.bits(21, 24);
+        let op0 = value.bit(15) as u32;
+
+        if op54 != 0 {
+            return None;
+        }
+
+        Some(bit_match! {
+            match (sf, op31, op0) {
+                ("_", "000", "_") => Self::ThreeSrc(ThreeSrc(value)),
+                ("1", "001", "_") => Self::ThreeSrc(ThreeSrc(value)),
+                ("1", "010", "0") => Self::ThreeSrc(ThreeSrc(value)),
+                // ("1", "011", "_") => todo!("maddpt/msubpt"),
+                ("1", "101", "_") => Self::ThreeSrc(ThreeSrc(value)),
+                ("1", "110", "0") => Self::ThreeSrc(ThreeSrc(value)),
+                _ => return None,
+            }
+        })
+    }
+
     pub fn new(value: u32) -> Option<Self> {
         let op0 = value.bit(30) as u32;
         let op1 = value.bit(28) as u32;
@@ -553,7 +698,7 @@ impl Instruction {
                 ("_", "1", "0010", "____0_") => todo!("cond cmp (reg)"),
                 ("_", "1", "0010", "____1_") => Self::new_cond_cmp_imm(value)?,
                 ("_", "1", "0100", "______") => Self::new_cond_select(value)?,
-                ("_", "1", "1___", "______") => todo!("three src"),
+                ("_", "1", "1___", "______") => Self::new_three_src(value)?,
                 _ => return None,
             }
         })
