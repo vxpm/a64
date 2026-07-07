@@ -3,7 +3,7 @@
 use core::fmt::Display;
 
 use a64_macros::bit_match;
-use bitos::integer::{i7, i9, u12};
+use bitos::integer::{i7, i9, u3, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
@@ -247,6 +247,145 @@ impl Display for UnscaledImm {
     }
 }
 
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegOffsetIndexOp {
+    ZeroExt32,
+    LeftShift,
+    SignExt32,
+    SignExt64,
+    Reserved,
+}
+
+impl Display for RegOffsetIndexOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let frag = match self {
+            Self::ZeroExt32 => "UXTW",
+            Self::LeftShift => "LSL",
+            Self::SignExt32 => "SXTW",
+            Self::SignExt64 => "SXTX",
+            Self::Reserved => "????",
+        };
+
+        write!(f, "{frag}")
+    }
+}
+
+impl RegOffsetIndexOp {
+    pub fn width(self) -> RegWidth {
+        match self {
+            Self::ZeroExt32 => RegWidth::W32,
+            Self::LeftShift => RegWidth::X64,
+            Self::SignExt32 => RegWidth::W32,
+            Self::SignExt64 => RegWidth::X64,
+            Self::Reserved => RegWidth::X64,
+        }
+    }
+}
+
+/// Load/store register (register offset)
+///
+/// This instruction loads/stores data of a register to/from memory. The address that is used for
+/// the operation is calculated from a base register and an offset register, which can be shifted
+/// or extended.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegOffset {
+    /// The general-purpose register to be transferred.
+    #[bits(0..5)]
+    pub rt: Reg,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rn: XrSp,
+    /// Whether to shift left by log2 of data size in bytes.
+    #[bits(12)]
+    pub s: bool,
+    /// Index op info.
+    #[bits(13..16)]
+    pub option: u3,
+    /// Offset register.
+    #[bits(16..21)]
+    pub rm: Reg,
+    /// Operation to perform.
+    #[bits(22..24)]
+    pub op: MemOpExtended,
+    /// Data size.
+    #[bits(30..32)]
+    pub size: DataSize,
+}
+
+impl RegOffset {
+    pub fn width(self) -> RegWidth {
+        match (self.op(), self.size()) {
+            (MemOpExtended::Store, DataSize::B8) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B16) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B32) => RegWidth::W32,
+            (MemOpExtended::Store, DataSize::B64) => RegWidth::X64,
+            (MemOpExtended::LoadZext, DataSize::B8) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B16) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B32) => RegWidth::W32,
+            (MemOpExtended::LoadZext, DataSize::B64) => RegWidth::X64,
+            (MemOpExtended::LoadSext64, _) => RegWidth::X64,
+            (MemOpExtended::LoadSext32, _) => RegWidth::W32,
+        }
+    }
+
+    pub fn index_op(self) -> RegOffsetIndexOp {
+        let option = self.option().value();
+        bit_match! {
+            match option {
+                "010" => RegOffsetIndexOp::ZeroExt32,
+                "011" => RegOffsetIndexOp::LeftShift,
+                "110" => RegOffsetIndexOp::SignExt32,
+                "111" => RegOffsetIndexOp::SignExt64,
+                _ => RegOffsetIndexOp::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for RegOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let width = self.width();
+        let mnemonic = match (self.op(), self.size()) {
+            (MemOpExtended::Store, DataSize::B8) => "STRB",
+            (MemOpExtended::Store, DataSize::B16) => "STRH",
+            (MemOpExtended::Store, DataSize::B32) => "STR",
+            (MemOpExtended::Store, DataSize::B64) => "STR",
+            (MemOpExtended::LoadZext, DataSize::B8) => "LDRB",
+            (MemOpExtended::LoadZext, DataSize::B16) => "LDRH",
+            (MemOpExtended::LoadZext, DataSize::B32) => "LDR",
+            (MemOpExtended::LoadZext, DataSize::B64) => "LDR",
+            (MemOpExtended::LoadSext64, DataSize::B8) => "LDRSB",
+            (MemOpExtended::LoadSext64, DataSize::B16) => "LDRSH",
+            (MemOpExtended::LoadSext64, DataSize::B32) => "LDRSW",
+            (MemOpExtended::LoadSext64, DataSize::B64) => "LDR",
+            (MemOpExtended::LoadSext32, DataSize::B8) => "LDRSB",
+            (MemOpExtended::LoadSext32, DataSize::B16) => "LDRSH",
+            (MemOpExtended::LoadSext32, DataSize::B32) => "LDR",
+            (MemOpExtended::LoadSext32, DataSize::B64) => "????",
+        };
+
+        let index_op = self.index_op();
+        let amount = if self.s() {
+            self.size().bytes().ilog2()
+        } else {
+            0
+        };
+
+        write!(
+            f,
+            "{} {}, [{}, {}, {} #{}]",
+            mnemonic,
+            self.rt().with_width(width),
+            self.rn(),
+            self.rm().with_width(index_op.width()),
+            self.index_op(),
+            amount,
+        )
+    }
+}
+
 /// Load/store register (unsigned immediate)
 ///
 /// This instruction loads/stores data of a register to/from memory. The address that is used for
@@ -384,6 +523,7 @@ pub enum Instruction {
     Pair(Pair),
     SimdPair(SimdPair),
     UnscaledImm(UnscaledImm),
+    RegOffset(RegOffset),
     UnsignedImm(UnsignedImm),
     SimdUnsignedImm(SimdUnsignedImm),
 }
@@ -440,6 +580,42 @@ impl Instruction {
 
                 // 64 bit
                 ("11", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
+                ("11", "1", "__") => todo!("simd 64 bit"),
+
+                _ => return None,
+            }
+        })
+    }
+
+    fn new_reg_offset(value: u32) -> Option<Self> {
+        let size = value.bits(30, 32);
+        let vr = value.bit(26) as u32;
+        let opc = value.bits(22, 24);
+        let option = value.bits(13, 16);
+
+        Some(bit_match! {
+            match (size, vr, opc) {
+                // 8 bit
+                ("00", "0", "__") => Self::RegOffset(RegOffset(value)),
+                ("00", "1", "__") => todo!("simd 8/128 bit"),
+
+                // unallocated
+                ("1_", "0", "11") => return None,
+                ("__", "1", "1_") => return None,
+
+                // 16 bit
+                ("01", "0", "__") => Self::RegOffset(RegOffset(value)),
+                ("01", "1", "__") => todo!("simd 16 bit"),
+
+                // 32 bit
+                ("10", "0", "__") => Self::RegOffset(RegOffset(value)),
+                ("10", "1", "__") => todo!("simd 32 bit"),
+
+                // prefetch
+                ("11", "0", "10") => todo!("prefetch"),
+
+                // 64 bit
+                ("11", "0", "__") => Self::RegOffset(RegOffset(value)),
                 ("11", "1", "__") => todo!("simd 64 bit"),
 
                 _ => return None,
@@ -529,7 +705,7 @@ impl Instruction {
                 ("__11", "_", "0__0_________", "10") => todo!("load/store reg (unprivileged)"),
                 ("__11", "_", "0__0_________", "11") => todo!("load/store reg (imm pre indexed)"),
                 ("__11", "_", "0__1_________", "00") => todo!("atomic mem ops"),
-                ("__11", "_", "0__1_________", "10") => todo!("load/store reg (reg offset)"),
+                ("__11", "_", "0__1_________", "10") => Self::new_reg_offset(value)?,
                 ("__11", "_", "0__1_________", "_1") => todo!("load/store reg (pac)"),
                 ("__11", "_", "1____________", "__") => Self::new_uimm(value)?,
                 _ => return None,
