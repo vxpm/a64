@@ -70,7 +70,6 @@ impl TwoSrc {
                 "000010" => TwoSrcOp::UnsignedDiv,
                 "000011" => TwoSrcOp::SignedDiv,
                 "0010__" => TwoSrcOp::Shift,
-                "010011" => TwoSrcOp::Reserved,
                 "0100__" => TwoSrcOp::Crc32,
                 "0101__" => TwoSrcOp::Crc32C,
                 // "011000" => TwoSrcOp::SignedMax,

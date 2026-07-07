@@ -144,14 +144,16 @@ impl Display for MoveImm {
                 )
             }
             MoveImmOp::B64 => {
-                let format = if self.q().is_128_bits() { ".2D" } else { "" };
-                write!(
-                    f,
-                    "MOVI {}{}, #{}",
-                    SimdRegScalar::D64(self.rd()),
-                    format,
-                    self.imm64(),
-                )
+                if self.q().is_128_bits() {
+                    write!(f, "MOVI {}.2D, #{}", self.rd(), self.imm64())
+                } else {
+                    write!(
+                        f,
+                        "MOVI {}, #{}",
+                        SimdRegScalar::D64(self.rd()),
+                        self.imm64(),
+                    )
+                }
             }
             MoveImmOp::Reserved => write!(f, "MOVI ????"),
         }
