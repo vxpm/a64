@@ -9,10 +9,10 @@ use derive_more::Display;
 
 use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, SimdReg, SimdRegScalarKind, XrSp};
 
-/// Kind of offseting done in a memory operation.
+/// Kind of offseting done in a pair memory operation.
 #[bitos(2)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OffsetKind {
+pub enum PairOffsetKind {
     /// The memory access address is `reg + offset`, and this access is non-temporal.
     OffsetNonTemporal = 0b00,
     /// The memory access address is `reg` and `reg + offset` is written back to `reg`.
@@ -47,7 +47,7 @@ pub struct Pair {
     pub op: MemOp,
     /// Offset kind.
     #[bits(23..25)]
-    pub offset_kind: OffsetKind,
+    pub offset_kind: PairOffsetKind,
     /// Width of the registers.
     #[bits(31)]
     pub sf: RegWidth,
@@ -57,7 +57,7 @@ impl Display for Pair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mnemonic = match (
             self.op(),
-            self.offset_kind() == OffsetKind::OffsetNonTemporal,
+            self.offset_kind() == PairOffsetKind::OffsetNonTemporal,
         ) {
             (MemOp::Store, true) => "STNP",
             (MemOp::Store, false) => "STP",
@@ -69,9 +69,11 @@ impl Display for Pair {
         let imm = self.imm().value() as i16 * self.sf().bytes() as i16;
 
         let offset = match self.offset_kind() {
-            OffsetKind::Offset | OffsetKind::OffsetNonTemporal => &format!("[{base}, #{imm}]"),
-            OffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
-            OffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
+            PairOffsetKind::Offset | PairOffsetKind::OffsetNonTemporal => {
+                &format!("[{base}, #{imm}]")
+            }
+            PairOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
+            PairOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
         };
 
         write!(
@@ -134,7 +136,7 @@ pub struct SimdPair {
     pub op: MemOp,
     /// Offset kind.
     #[bits(23..25)]
-    pub offset_kind: OffsetKind,
+    pub offset_kind: PairOffsetKind,
     /// Width of the scalar registers.
     #[bits(30..32)]
     pub opc: SimdPairWidth,
@@ -144,7 +146,7 @@ impl Display for SimdPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mnemonic = match (
             self.op(),
-            self.offset_kind() == OffsetKind::OffsetNonTemporal,
+            self.offset_kind() == PairOffsetKind::OffsetNonTemporal,
         ) {
             (MemOp::Store, true) => "STNP",
             (MemOp::Store, false) => "STP",
@@ -157,9 +159,11 @@ impl Display for SimdPair {
         let imm = self.imm().value() as i16 * scalar_kind.bytes() as i16;
 
         let offset = match self.offset_kind() {
-            OffsetKind::Offset | OffsetKind::OffsetNonTemporal => &format!("[{base}, #{imm}]"),
-            OffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
-            OffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
+            PairOffsetKind::Offset | PairOffsetKind::OffsetNonTemporal => {
+                &format!("[{base}, #{imm}]")
+            }
+            PairOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
+            PairOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
         };
 
         write!(
@@ -173,19 +177,36 @@ impl Display for SimdPair {
     }
 }
 
-/// Load/store register (unscaled immediate)
+/// Kind of offseting done in a single-element memory operation.
+#[bitos(2)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SingleOffsetKind {
+    /// The memory access address is `reg + offset`.
+    UnscaledOffset = 0b00,
+    /// The memory access address is `reg` and `reg + offset` is written back to `reg`.
+    PostIndexed = 0b01,
+    /// The memory access address is `reg + offset` and this access is unprivileged.
+    UnscaledOffsetUnprivileged = 0b10,
+    /// The memory access address is `reg + offset` and `reg + offset` is written back to `reg`.
+    PreIndexed = 0b11,
+}
+
+/// Load/store register
 ///
 /// This instruction loads/stores data of a register to/from memory. The address that is used for
 /// the operation is calculated from a base register and an immediate offset that is unscaled.
 #[bitos(32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnscaledImm {
+pub struct Single {
     /// The general-purpose register to be transferred.
     #[bits(0..5)]
     pub rt: Reg,
     /// The general-purpose base register.
     #[bits(5..10)]
     pub rn: XrSp,
+    /// Offset kind.
+    #[bits(10..12)]
+    pub offset_kind: SingleOffsetKind,
     /// Offset in bytes.
     #[bits(12..21)]
     pub imm: i9,
@@ -197,7 +218,7 @@ pub struct UnscaledImm {
     pub size: DataSize,
 }
 
-impl UnscaledImm {
+impl Single {
     pub fn width(self) -> RegWidth {
         match (self.op(), self.size()) {
             (MemOpExtended::Store, DataSize::B8) => RegWidth::W32,
@@ -212,37 +233,173 @@ impl UnscaledImm {
             (MemOpExtended::LoadSext32, _) => RegWidth::W32,
         }
     }
+
+    pub fn mnemonic(self) -> &'static str {
+        match self.offset_kind() {
+            SingleOffsetKind::UnscaledOffset => match (self.op(), self.size()) {
+                (MemOpExtended::Store, DataSize::B8) => "STURB",
+                (MemOpExtended::Store, DataSize::B16) => "STURH",
+                (MemOpExtended::Store, DataSize::B32) => "STUR",
+                (MemOpExtended::Store, DataSize::B64) => "STUR",
+                (MemOpExtended::LoadZext, DataSize::B8) => "LDURB",
+                (MemOpExtended::LoadZext, DataSize::B16) => "LDURH",
+                (MemOpExtended::LoadZext, DataSize::B32) => "LDUR",
+                (MemOpExtended::LoadZext, DataSize::B64) => "LDUR",
+                (MemOpExtended::LoadSext64, DataSize::B8) => "LDURSB",
+                (MemOpExtended::LoadSext64, DataSize::B16) => "LDURSH",
+                (MemOpExtended::LoadSext64, DataSize::B32) => "LDURSW",
+                (MemOpExtended::LoadSext64, DataSize::B64) => "LDUR",
+                (MemOpExtended::LoadSext32, DataSize::B8) => "LDURSB",
+                (MemOpExtended::LoadSext32, DataSize::B16) => "LDURSH",
+                (MemOpExtended::LoadSext32, DataSize::B32) => "LDUR",
+                (MemOpExtended::LoadSext32, DataSize::B64) => "????",
+            },
+            SingleOffsetKind::UnscaledOffsetUnprivileged => match (self.op(), self.size()) {
+                (MemOpExtended::Store, DataSize::B8) => "STTRB",
+                (MemOpExtended::Store, DataSize::B16) => "STTRH",
+                (MemOpExtended::Store, DataSize::B32) => "STTR",
+                (MemOpExtended::Store, DataSize::B64) => "STTR",
+                (MemOpExtended::LoadZext, DataSize::B8) => "LDTRB",
+                (MemOpExtended::LoadZext, DataSize::B16) => "LDTRH",
+                (MemOpExtended::LoadZext, DataSize::B32) => "LDTR",
+                (MemOpExtended::LoadZext, DataSize::B64) => "LDTR",
+                (MemOpExtended::LoadSext64, DataSize::B8) => "LDTRSB",
+                (MemOpExtended::LoadSext64, DataSize::B16) => "LDTRSH",
+                (MemOpExtended::LoadSext64, DataSize::B32) => "LDTRSW",
+                (MemOpExtended::LoadSext64, DataSize::B64) => "LDTR",
+                (MemOpExtended::LoadSext32, DataSize::B8) => "LDTRSB",
+                (MemOpExtended::LoadSext32, DataSize::B16) => "LDTRSH",
+                (MemOpExtended::LoadSext32, DataSize::B32) => "LDTR",
+                (MemOpExtended::LoadSext32, DataSize::B64) => "????",
+            },
+            SingleOffsetKind::PostIndexed | SingleOffsetKind::PreIndexed => {
+                match (self.op(), self.size()) {
+                    (MemOpExtended::Store, DataSize::B8) => "STRB",
+                    (MemOpExtended::Store, DataSize::B16) => "STRH",
+                    (MemOpExtended::Store, DataSize::B32) => "STR",
+                    (MemOpExtended::Store, DataSize::B64) => "STR",
+                    (MemOpExtended::LoadZext, DataSize::B8) => "LDRB",
+                    (MemOpExtended::LoadZext, DataSize::B16) => "LDRH",
+                    (MemOpExtended::LoadZext, DataSize::B32) => "LDR",
+                    (MemOpExtended::LoadZext, DataSize::B64) => "LDR",
+                    (MemOpExtended::LoadSext64, DataSize::B8) => "LDRSB",
+                    (MemOpExtended::LoadSext64, DataSize::B16) => "LDRSH",
+                    (MemOpExtended::LoadSext64, DataSize::B32) => "LDRSW",
+                    (MemOpExtended::LoadSext64, DataSize::B64) => "LDR",
+                    (MemOpExtended::LoadSext32, DataSize::B8) => "LDRSB",
+                    (MemOpExtended::LoadSext32, DataSize::B16) => "LDRSH",
+                    (MemOpExtended::LoadSext32, DataSize::B32) => "LDR",
+                    (MemOpExtended::LoadSext32, DataSize::B64) => "????",
+                }
+            }
+        }
+    }
 }
 
-impl Display for UnscaledImm {
+impl Display for Single {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let width = self.width();
-        let mnemonic = match (self.op(), self.size()) {
-            (MemOpExtended::Store, DataSize::B8) => "STURB",
-            (MemOpExtended::Store, DataSize::B16) => "STURH",
-            (MemOpExtended::Store, DataSize::B32) => "STUR",
-            (MemOpExtended::Store, DataSize::B64) => "STUR",
-            (MemOpExtended::LoadZext, DataSize::B8) => "LDURB",
-            (MemOpExtended::LoadZext, DataSize::B16) => "LDURH",
-            (MemOpExtended::LoadZext, DataSize::B32) => "LDUR",
-            (MemOpExtended::LoadZext, DataSize::B64) => "LDUR",
-            (MemOpExtended::LoadSext64, DataSize::B8) => "LDURSB",
-            (MemOpExtended::LoadSext64, DataSize::B16) => "LDURSH",
-            (MemOpExtended::LoadSext64, DataSize::B32) => "LDURSW",
-            (MemOpExtended::LoadSext64, DataSize::B64) => "LDUR",
-            (MemOpExtended::LoadSext32, DataSize::B8) => "LDURSB",
-            (MemOpExtended::LoadSext32, DataSize::B16) => "LDURSH",
-            (MemOpExtended::LoadSext32, DataSize::B32) => "LDUR",
-            (MemOpExtended::LoadSext32, DataSize::B64) => "????",
+        let mnemonic = self.mnemonic();
+
+        let base = self.rn();
+        let imm = self.imm();
+
+        let offset = match self.offset_kind() {
+            SingleOffsetKind::UnscaledOffset | SingleOffsetKind::UnscaledOffsetUnprivileged => {
+                &format!("[{base}, #{imm}]")
+            }
+            SingleOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
+            SingleOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
         };
 
         write!(
             f,
-            "{} {}, [{}, #{}]",
+            "{} {}, {}",
             mnemonic,
             self.rt().with_width(width),
-            self.rn(),
-            self.imm()
+            offset
+        )
+    }
+}
+
+/// Load/store SIMD register
+///
+/// This instruction loads/stores data of a SIMD register to/from memory. The address that is used
+/// for the operation is calculated from a base register and an immediate offset that is unscaled.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SimdSingle {
+    /// The SIMD register to be transferred.
+    #[bits(0..5)]
+    pub rt: SimdReg,
+    /// The general-purpose base register.
+    #[bits(5..10)]
+    pub rn: XrSp,
+    /// Offset kind.
+    #[bits(10..12)]
+    pub offset_kind: SingleOffsetKind,
+    /// Offset in bytes.
+    #[bits(12..21)]
+    pub imm: i9,
+    /// Operation to perform.
+    #[bits(22)]
+    pub op: MemOp,
+    /// Whether to use Q128.
+    #[bits(23)]
+    pub opc: bool,
+    /// Data size.
+    #[bits(30..32)]
+    pub size: DataSize,
+}
+
+impl SimdSingle {
+    pub fn scalar_kind(self) -> SimdRegScalarKind {
+        match (self.size(), self.opc()) {
+            (DataSize::B8, false) => SimdRegScalarKind::B8,
+            (DataSize::B16, false) => SimdRegScalarKind::H16,
+            (DataSize::B32, false) => SimdRegScalarKind::S32,
+            (DataSize::B64, false) => SimdRegScalarKind::D64,
+            (_, true) => SimdRegScalarKind::Q128,
+        }
+    }
+
+    pub fn mnemonic(self) -> &'static str {
+        match self.offset_kind() {
+            SingleOffsetKind::UnscaledOffset => match self.op() {
+                MemOp::Store => "STUR",
+                MemOp::Load => "LDUR",
+            },
+            SingleOffsetKind::UnscaledOffsetUnprivileged => "????",
+            SingleOffsetKind::PostIndexed | SingleOffsetKind::PreIndexed => match self.op() {
+                MemOp::Store => "STR",
+                MemOp::Load => "LDR",
+            },
+        }
+    }
+}
+
+impl Display for SimdSingle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let scalar_kind = self.scalar_kind();
+        let mnemonic = self.mnemonic();
+
+        let base = self.rn();
+        let imm = self.imm();
+
+        let offset = match self.offset_kind() {
+            SingleOffsetKind::UnscaledOffset | SingleOffsetKind::UnscaledOffsetUnprivileged => {
+                &format!("[{base}, #{imm}]")
+            }
+            SingleOffsetKind::PreIndexed => &format!("[{base}, #{imm}]!"),
+            SingleOffsetKind::PostIndexed => &format!("[{base}], #{imm}"),
+        };
+
+        write!(
+            f,
+            "{} {}, {}",
+            mnemonic,
+            self.rt().scalar(scalar_kind),
+            offset,
         )
     }
 }
@@ -580,8 +737,10 @@ impl Display for SimdUnsignedImm {
 pub enum Instruction {
     Pair(Pair),
     SimdPair(SimdPair),
-    UnscaledImm(UnscaledImm),
-    SimdUnscaledImm(SimdUnscaledImm),
+    Single(Single),
+    SimdSingle(SimdSingle),
+    // UnscaledImm(UnscaledImm),
+    // SimdUnscaledImm(SimdUnscaledImm),
     RegOffset(RegOffset),
     UnsignedImm(UnsignedImm),
     SimdUnsignedImm(SimdUnsignedImm),
@@ -591,7 +750,7 @@ impl Instruction {
     fn new_pair(value: u32) -> Option<Self> {
         let opc = value.bits(30, 32);
         let vr = value.bit(26) as u32;
-        let temporal = value.bits(23, 25) != OffsetKind::OffsetNonTemporal as u32;
+        let temporal = value.bits(23, 25) != PairOffsetKind::OffsetNonTemporal as u32;
 
         Some(bit_match! {
             match (opc, vr) {
@@ -611,35 +770,48 @@ impl Instruction {
         })
     }
 
-    fn new_unscaled_imm(value: u32) -> Option<Self> {
+    fn new_single(value: u32) -> Option<Self> {
         let size = value.bits(30, 32);
         let vr = value.bit(26) as u32;
         let opc = value.bits(22, 24);
+        let offset_kind = value.bits(10, 12);
 
         Some(bit_match! {
-            match (size, vr, opc) {
+            match (size, vr, opc, offset_kind) {
                 // 8 bit
-                ("00", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
-                ("00", "1", "__") => Self::SimdUnscaledImm(SimdUnscaledImm(value)),
+                ("00", "0", "__", "__") => Self::Single(Single(value)),
+
+                // simd 8/128 bit
+                ("00", "1", "__", "10") => return None,
+                ("00", "1", "__", "__") => Self::SimdSingle(SimdSingle(value)),
 
                 // unallocated
-                ("1_", "0", "11") => return None,
-                ("__", "1", "1_") => return None,
+                ("1_", "0", "11", "__") => return None,
+                ("__", "1", "1_", "__") => return None,
 
                 // 16 bit
-                ("01", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
-                ("01", "1", "__") => Self::SimdUnscaledImm(SimdUnscaledImm(value)),
+                ("01", "0", "__", "__") => Self::Single(Single(value)),
+
+                // simd 16 bit
+                ("01", "1", "__", "10") => return None,
+                ("01", "1", "__", "__") => Self::SimdSingle(SimdSingle(value)),
 
                 // 32 bit
-                ("10", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
-                ("10", "1", "__") => Self::SimdUnscaledImm(SimdUnscaledImm(value)),
+                ("10", "0", "__", "__") => Self::Single(Single(value)),
+
+                // simd 32 bit
+                ("10", "1", "__", "10") => return None,
+                ("10", "1", "__", "__") => Self::SimdSingle(SimdSingle(value)),
 
                 // prefetch
-                ("11", "0", "10") => todo!("prefetch"),
+                ("11", "0", "10", "__") => todo!("prefetch"),
 
                 // 64 bit
-                ("11", "0", "__") => Self::UnscaledImm(UnscaledImm(value)),
-                ("11", "1", "__") => Self::SimdUnscaledImm(SimdUnscaledImm(value)),
+                ("11", "0", "__", "__") => Self::Single(Single(value)),
+
+                // simd 64 bit
+                ("11", "1", "__", "10") => return None,
+                ("11", "1", "__", "__") => Self::SimdSingle(SimdSingle(value)),
 
                 _ => return None,
             }
@@ -762,11 +934,8 @@ impl Instruction {
                 ("__01", "_", "1__0_________", "01") => todo!("memcopy and memset"),
 
                 ("__10", "_", "_____________", "__") => Self::new_pair(value)?,
+                ("__11", "_", "0__0_________", "__") => Self::new_single(value)?,
 
-                ("__11", "_", "0__0_________", "00") => Self::new_unscaled_imm(value)?,
-                ("__11", "_", "0__0_________", "01") => todo!("load/store reg (imm post indexed)"),
-                ("__11", "_", "0__0_________", "10") => todo!("load/store reg (unprivileged)"),
-                ("__11", "_", "0__0_________", "11") => todo!("load/store reg (imm pre indexed)"),
                 ("__11", "_", "0__1_________", "00") => todo!("atomic mem ops"),
                 ("__11", "_", "0__1_________", "10") => Self::new_reg_offset(value)?,
                 ("__11", "_", "0__1_________", "_1") => todo!("load/store reg (pac)"),
