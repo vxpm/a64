@@ -1,3 +1,4 @@
+use core::time::Duration;
 use std::io::{Read, Write as _};
 use std::process::{Command, Output};
 use tempfile::NamedTempFile;
@@ -29,7 +30,11 @@ impl Context {
         ])
         .stdin(reader);
 
-        let result = cmd.output().unwrap();
+        let Ok(result) = cmd.output() else {
+            println!("couldnt spawn gas");
+            std::process::exit(-1);
+        };
+
         if !result.status.success() {
             return Err(result);
         }
@@ -46,20 +51,31 @@ impl Context {
         ])
         .stdout(writer);
 
-        let result = cmd.output().unwrap();
-        assert!(result.status.success());
+        let Ok(result) = cmd.output() else {
+            println!("couldnt spawn objcopy");
+            std::process::exit(-1);
+        };
+
+        if !result.status.success() {
+            println!("objcopy failed");
+            std::process::exit(-1);
+        }
 
         std::mem::drop(cmd);
 
         self.buffer.clear();
-        reader.read_to_end(&mut self.buffer).unwrap();
+        if reader.read_to_end(&mut self.buffer).is_err() {
+            println!("failed reading tmpfile");
+            std::process::exit(-1);
+        }
+
         Ok(u32::from_le_bytes(
             self.buffer.as_slice().try_into().unwrap(),
         ))
     }
 }
 
-fn main() {
+fn fuzz() {
     let mut ctx = Context::new();
     loop {
         let random = rand::random::<u32>();
@@ -87,23 +103,34 @@ fn main() {
                     println!("{}", String::from_utf8_lossy(&output.stderr));
                     println!("FAILED - ASSEMBLER ERROR: {}", output.status);
                     println!("{random:08X} - {instruction} ({instruction:?})");
-                    panic!();
+                    std::process::exit(0);
                 }
             };
 
             let Ok(Some(compiled_instruction)) =
                 std::panic::catch_unwind(|| a64::Instruction::new(compiled))
             else {
-                panic!(
+                println!(
                     "FAILED: cant decode compiled instruction - {random:08X} {instruction} ({instruction:?})"
                 );
+                std::process::exit(0);
             };
 
-            assert_eq!(
-                instruction.to_string(),
-                compiled_instruction.to_string(),
-                "FAILED: {random:08X} / {compiled:08X} - expected {instruction} ({instruction:?}), got {compiled:08X} {compiled_instruction} ({compiled_instruction:?})"
-            );
+            if instruction.to_string() != compiled_instruction.to_string() {
+                println!(
+                    "FAILED: {random:08X} / {compiled:08X} - expected {instruction} ({instruction:?}), got {compiled:08X} {compiled_instruction} ({compiled_instruction:?})"
+                );
+                std::process::exit(0);
+            }
         }
     }
+}
+
+fn main() {
+    std::panic::set_hook(Box::new(|_| ()));
+    for _ in 0..4 {
+        _ = std::thread::spawn(fuzz);
+    }
+
+    std::thread::sleep(Duration::MAX);
 }
