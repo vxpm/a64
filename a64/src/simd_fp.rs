@@ -7,7 +7,75 @@ use bitos::integer::{u3, u4, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{Reg, RegWidth, SimdReg, SimdRegScalar, SimdRegWidth};
+use crate::{Reg, RegWidth, SimdReg, SimdRegScalar, SimdRegWidth, SimdScalarKind};
+
+/// Move vector element to general-purpose register
+///
+/// This instruction reads the integer from the source SIMD & FP register, extends it to form a
+/// 32-bit or 64-bit value, and writes the result to destination general-purpose register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IntMove {
+    /// The general-purpose destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// The SIMD source register.
+    #[bits(5..10)]
+    pub rn: SimdReg,
+    /// Whether to zero-extend or sign-extend.
+    #[bits(12)]
+    pub unsigned: bool,
+    /// Operation info.
+    #[bits(16..21)]
+    pub imm: u5,
+    /// Width of the general-purpose register.
+    #[bits(30)]
+    pub q: RegWidth,
+}
+
+impl IntMove {
+    pub fn elem_kind(self) -> SimdScalarKind {
+        let imm = self.imm().value();
+        bit_match! {
+            match imm {
+                "____1" => SimdScalarKind::B,
+                "___10" => SimdScalarKind::H,
+                "__100" => SimdScalarKind::S,
+                "_1000" => SimdScalarKind::D,
+                _ => SimdScalarKind::Q,
+            }
+        }
+    }
+
+    pub fn index(self) -> u8 {
+        let imm = self.imm().value();
+        bit_match! {
+            match imm {
+                "____1" => imm.bits(1, 5),
+                "___10" => imm.bits(2, 5),
+                "__100" => imm.bits(3, 5),
+                "_1000" => imm.bits(4, 5),
+                _ => 0,
+            }
+        }
+    }
+}
+
+impl Display for IntMove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = if self.unsigned() { "UMOV" } else { "SMOV" };
+
+        write!(
+            f,
+            "{} {}, {}.{}[{}]",
+            mnemonic,
+            self.rd().with_width(self.q()),
+            self.rn(),
+            self.elem_kind(),
+            self.index()
+        )
+    }
+}
 
 /// Move immediate (vector)
 ///
@@ -185,7 +253,7 @@ pub struct FloatMove {
     /// The general-purpose source register.
     #[bits(5..10)]
     pub rn_gpr: Reg,
-    /// The general-purpose source register.
+    /// The SIMD source register.
     #[bits(5..10)]
     pub rn_simd: SimdReg,
     /// Operation info.
@@ -259,11 +327,35 @@ impl Display for FloatMove {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
+    IntMove(IntMove),
     MoveImm(MoveImm),
     FloatMove(FloatMove),
 }
 
 impl Instruction {
+    fn new_simd_copy(value: u32) -> Option<Self> {
+        let q = value.bit(30) as u32;
+        let op = value.bit(29) as u32;
+        let imm5 = value.bits(16, 21);
+        let imm4 = value.bits(11, 15);
+
+        Some(bit_match! {
+            match (q, op, imm5, imm4) {
+                ("_", "0", "_____", "0000") => todo!("dup elem"),
+                ("_", "0", "_____", "0001") => todo!("dup general"),
+                ("0", "0", "___00", "0101") => return None,
+                ("0", "0", "_____", "0101") => Self::IntMove(IntMove(value)),
+                ("0", "0", "__000", "0111") => return None,
+                ("0", "0", "_____", "0111") => Self::IntMove(IntMove(value)), // unsigned
+                ("1", "0", "_____", "0011") => todo!("ins general"),
+                ("1", "0", "_____", "0101") => Self::IntMove(IntMove(value)),
+                ("1", "0", "_1000", "0111") => Self::IntMove(IntMove(value)), // unsigned
+                ("1", "1", "_____", "____") => todo!("ins elem"),
+                _ => return None,
+            }
+        })
+    }
+
     fn new_simd_modified_imm(value: u32) -> Option<Self> {
         let q = value.bit(30) as u32;
         let op1 = value.bit(29) as u32;
@@ -330,7 +422,8 @@ impl Instruction {
                 ("_", "0", "01", "10", "001") => todo!("fcvtmu scalar"),
                 ("_", "0", "01", "11", "000") => todo!("fcvtzs scalar int"),
                 ("_", "0", "01", "11", "001") => todo!("fcvtzu scalar int"),
-                ("1", "0", "01", "0_", "11_") => Self::FloatMove(FloatMove(value)),
+                ("1", "0", "01", "00", "11_") => Self::FloatMove(FloatMove(value)),
+                ("1", "0", "10", "01", "11_") => Self::FloatMove(FloatMove(value)),
                 _ => return None,
             }
         })
@@ -368,7 +461,7 @@ impl Instruction {
 
                 ("0_10", "0_", "_0__", "___0___", "_0") => todo!("simd extract"),
 
-                ("0__0", "00", "00__", "___0___", "_1") => todo!("simd copy"),
+                ("0__0", "00", "00__", "___0___", "_1") => Self::new_simd_copy(value)?,
                 ("0__0", "0_", "10__", "___0___", "_1") => todo!("simd three same fp16"),
                 ("0__0", "0_", "1111", "00_____", "10") => todo!("simd two reg misc fp16"),
                 ("0__0", "0_", "_0__", "___1___", "_1") => todo!("simd three reg extension"),

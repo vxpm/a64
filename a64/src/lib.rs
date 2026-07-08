@@ -115,10 +115,10 @@ impl RegWidth {
     }
 
     #[inline(always)]
-    pub fn scalar(self) -> SimdRegScalarKind {
+    pub fn scalar(self) -> SimdScalarKind {
         match self {
-            Self::W32 => SimdRegScalarKind::S32,
-            Self::X64 => SimdRegScalarKind::D64,
+            Self::W32 => SimdScalarKind::S,
+            Self::X64 => SimdScalarKind::D,
         }
     }
 }
@@ -598,34 +598,40 @@ impl SimdRegWidth {
 
 /// Enumeration of scalar kinds within a SIMD register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SimdRegScalarKind {
-    /// Lower 8 bits.
-    B8,
-    /// Lower 16 bits.
-    H16,
-    /// Lower 32 bits.
-    S32,
-    /// Lower 64 bits.
-    D64,
-    /// All 128 bits.
-    Q128,
+pub enum SimdScalarKind {
+    /// 8 bits.
+    B,
+    /// 16 bits.
+    H,
+    /// 32 bits.
+    S,
+    /// 64 bits.
+    D,
+    /// 128 bits.
+    Q,
 }
 
-impl SimdRegScalarKind {
+impl SimdScalarKind {
     #[inline(always)]
     pub fn bits(self) -> u32 {
         match self {
-            Self::B8 => 8,
-            Self::H16 => 16,
-            Self::S32 => 32,
-            Self::D64 => 64,
-            Self::Q128 => 128,
+            Self::B => 8,
+            Self::H => 16,
+            Self::S => 32,
+            Self::D => 64,
+            Self::Q => 128,
         }
     }
 
     #[inline(always)]
     pub fn bytes(self) -> u32 {
         self.bits() / 8
+    }
+}
+
+impl Display for SimdScalarKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
     }
 }
 
@@ -703,13 +709,13 @@ impl Display for SimdRegScalar {
 impl SimdReg {
     /// Returns the scalar of the given kind contained within this register.
     #[inline(always)]
-    pub fn scalar(self, kind: SimdRegScalarKind) -> SimdRegScalar {
+    pub fn scalar(self, kind: SimdScalarKind) -> SimdRegScalar {
         match kind {
-            SimdRegScalarKind::B8 => SimdRegScalar::B8(self),
-            SimdRegScalarKind::H16 => SimdRegScalar::H16(self),
-            SimdRegScalarKind::S32 => SimdRegScalar::S32(self),
-            SimdRegScalarKind::D64 => SimdRegScalar::D64(self),
-            SimdRegScalarKind::Q128 => SimdRegScalar::Q128(self),
+            SimdScalarKind::B => SimdRegScalar::B8(self),
+            SimdScalarKind::H => SimdRegScalar::H16(self),
+            SimdScalarKind::S => SimdRegScalar::S32(self),
+            SimdScalarKind::D => SimdRegScalar::D64(self),
+            SimdScalarKind::Q => SimdRegScalar::Q128(self),
         }
     }
 }

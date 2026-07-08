@@ -7,7 +7,7 @@ use bitos::integer::{i7, i9, u3, u12};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, SimdReg, SimdRegScalarKind, XrSp};
+use crate::{DataSize, MemOp, MemOpExtended, Reg, RegWidth, SimdReg, SimdScalarKind, XrSp};
 
 /// Load-acquire/store-release register
 ///
@@ -158,12 +158,12 @@ pub enum SimdPairWidth {
 }
 
 impl SimdPairWidth {
-    pub fn kind(self) -> SimdRegScalarKind {
+    pub fn kind(self) -> SimdScalarKind {
         match self {
-            Self::S32 => SimdRegScalarKind::S32,
-            Self::D64 => SimdRegScalarKind::D64,
-            Self::Q128 => SimdRegScalarKind::Q128,
-            Self::Reserved => SimdRegScalarKind::Q128, // whatever
+            Self::S32 => SimdScalarKind::S,
+            Self::D64 => SimdScalarKind::D,
+            Self::Q128 => SimdScalarKind::Q,
+            Self::Reserved => SimdScalarKind::Q, // whatever
         }
     }
 }
@@ -403,13 +403,13 @@ pub struct SimdSingle {
 }
 
 impl SimdSingle {
-    pub fn scalar_kind(self) -> SimdRegScalarKind {
+    pub fn scalar_kind(self) -> SimdScalarKind {
         match (self.size(), self.opc()) {
-            (DataSize::B8, false) => SimdRegScalarKind::B8,
-            (DataSize::B16, false) => SimdRegScalarKind::H16,
-            (DataSize::B32, false) => SimdRegScalarKind::S32,
-            (DataSize::B64, false) => SimdRegScalarKind::D64,
-            (_, true) => SimdRegScalarKind::Q128,
+            (DataSize::B8, false) => SimdScalarKind::B,
+            (DataSize::B16, false) => SimdScalarKind::H,
+            (DataSize::B32, false) => SimdScalarKind::S,
+            (DataSize::B64, false) => SimdScalarKind::D,
+            (_, true) => SimdScalarKind::Q,
         }
     }
 
@@ -475,13 +475,13 @@ pub struct SimdUnscaledImm {
 }
 
 impl SimdUnscaledImm {
-    pub fn scalar_kind(self) -> SimdRegScalarKind {
+    pub fn scalar_kind(self) -> SimdScalarKind {
         match (self.size(), self.opc()) {
-            (DataSize::B8, false) => SimdRegScalarKind::B8,
-            (DataSize::B16, false) => SimdRegScalarKind::H16,
-            (DataSize::B32, false) => SimdRegScalarKind::S32,
-            (DataSize::B64, false) => SimdRegScalarKind::D64,
-            (_, true) => SimdRegScalarKind::Q128,
+            (DataSize::B8, false) => SimdScalarKind::B,
+            (DataSize::B16, false) => SimdScalarKind::H,
+            (DataSize::B32, false) => SimdScalarKind::S,
+            (DataSize::B64, false) => SimdScalarKind::D,
+            (_, true) => SimdScalarKind::Q,
         }
     }
 }
@@ -746,13 +746,13 @@ pub struct SimdUnsignedImm {
 }
 
 impl SimdUnsignedImm {
-    pub fn scalar_kind(self) -> SimdRegScalarKind {
+    pub fn scalar_kind(self) -> SimdScalarKind {
         match (self.size(), self.opc()) {
-            (DataSize::B8, false) => SimdRegScalarKind::B8,
-            (DataSize::B16, false) => SimdRegScalarKind::H16,
-            (DataSize::B32, false) => SimdRegScalarKind::S32,
-            (DataSize::B64, false) => SimdRegScalarKind::D64,
-            (_, true) => SimdRegScalarKind::Q128,
+            (DataSize::B8, false) => SimdScalarKind::B,
+            (DataSize::B16, false) => SimdScalarKind::H,
+            (DataSize::B32, false) => SimdScalarKind::S,
+            (DataSize::B64, false) => SimdScalarKind::D,
+            (_, true) => SimdScalarKind::Q,
         }
     }
 }
