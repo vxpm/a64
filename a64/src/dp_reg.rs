@@ -16,11 +16,6 @@ pub enum TwoSrcOp {
     Shift,
     Crc32,
     Crc32C,
-    // These are all FEAT_CSSC (v8.7):
-    // SignedMax,
-    // UnsignedMax,
-    // SignedMin,
-    // UnsignedMin,
     Reserved,
 }
 
@@ -72,10 +67,6 @@ impl TwoSrc {
                 "0010__" => TwoSrcOp::Shift,
                 "0100__" => TwoSrcOp::Crc32,
                 "0101__" => TwoSrcOp::Crc32C,
-                // "011000" => TwoSrcOp::SignedMax,
-                // "011001" => TwoSrcOp::UnsignedMax,
-                // "011010" => TwoSrcOp::SignedMin,
-                // "011011" => TwoSrcOp::UnsignedMin,
                 _ => TwoSrcOp::Reserved,
             }
         }
@@ -95,10 +86,6 @@ impl Display for TwoSrc {
             },
             TwoSrcOp::Crc32 => &format!("CRC32{}", self.sz()),
             TwoSrcOp::Crc32C => &format!("CRC32C{}", self.sz()),
-            // TwoSrcOp::SignedMax => "SMAX",
-            // TwoSrcOp::UnsignedMax => "UMAX",
-            // TwoSrcOp::SignedMin => "SMIN",
-            // TwoSrcOp::UnsignedMin => "UMIN",
             TwoSrcOp::Reserved => "????",
         };
 
@@ -114,6 +101,86 @@ impl Display for TwoSrc {
             self.rd().with_width(rd_rn_width),
             self.rn().with_width(rd_rn_width),
             self.rm().with_width(self.sf()),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OneSrcOp {
+    ReverseBits,
+    ReverseBytesHalf,
+    ReverseBytesWord,
+    ReverseBytes,
+    CountLeadingZeros,
+    CountLeadingSign,
+    Reserved,
+}
+
+impl Display for OneSrcOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self {
+            Self::ReverseBits => "RBIT",
+            Self::ReverseBytesHalf => "REV16",
+            Self::ReverseBytesWord => "REV32",
+            Self::ReverseBytes => "REV",
+            Self::CountLeadingZeros => "CLZ",
+            Self::CountLeadingSign => "CLS",
+            Self::Reserved => "????",
+        };
+
+        write!(f, "{mnemonic}")
+    }
+}
+
+/// One source operation
+///
+/// This instruction performs an operation on a source register and writes the result to a
+/// destination register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OneSrc {
+    /// Destination register.
+    #[bits(0..5)]
+    pub rd: Reg,
+    /// Source register.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Operation info.
+    #[bits(10..16)]
+    pub opcode: u6,
+    /// Width of the registers.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl OneSrc {
+    pub fn op(self) -> OneSrcOp {
+        let sf = self.sf() as u32;
+        let opcode = self.opcode().value();
+
+        bit_match! {
+            match (sf, opcode) {
+                ("_", "000000") => OneSrcOp::ReverseBits,
+                ("_", "000001") => OneSrcOp::ReverseBytesHalf,
+                ("0", "000010") => OneSrcOp::ReverseBytes,
+                ("1", "000010") => OneSrcOp::ReverseBytesWord,
+                ("1", "000011") => OneSrcOp::ReverseBytes,
+                ("_", "000100") => OneSrcOp::CountLeadingZeros,
+                ("_", "000101") => OneSrcOp::CountLeadingSign,
+                _ => OneSrcOp::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for OneSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {}, {}",
+            self.op(),
+            self.rd().with_width(self.sf()),
+            self.rn().with_width(self.sf())
         )
     }
 }
@@ -548,6 +615,7 @@ impl Display for ThreeSrc {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     TwoSrc(TwoSrc),
+    OneSrc(OneSrc),
     Logical(Logical),
     AddSubShifted(AddSubShifted),
     AddSubExt(AddSubExt),
@@ -586,6 +654,20 @@ impl Instruction {
                 _ => return None,
             }
         })
+    }
+
+    pub fn new_one_src(value: u32) -> Option<Self> {
+        let s = value.bit(29);
+        if s {
+            return None;
+        }
+
+        let one_src = OneSrc(value);
+        if one_src.op() == OneSrcOp::Reserved {
+            None
+        } else {
+            Some(Self::OneSrc(one_src))
+        }
     }
 
     pub fn new_logical(value: u32) -> Option<Self> {
@@ -685,7 +767,7 @@ impl Instruction {
         Some(bit_match! {
             match (op0, op1, op2, op3) {
                 ("0", "1", "0110", "______") => Self::new_two_src(value)?,
-                ("1", "1", "0110", "______") => todo!("one src"),
+                ("1", "1", "0110", "______") => Self::new_one_src(value)?,
                 ("_", "0", "0___", "______") => Self::new_logical(value)?,
                 ("_", "0", "1__0", "______") => Self::new_add_sub_shifted(value)?,
                 ("_", "0", "1__1", "______") => Self::new_add_sub_ext(value)?,
