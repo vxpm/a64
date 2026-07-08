@@ -113,6 +113,14 @@ impl RegWidth {
     pub fn bytes(self) -> u32 {
         self.bits() / 8
     }
+
+    #[inline(always)]
+    pub fn scalar(self) -> SimdRegScalarKind {
+        match self {
+            Self::W32 => SimdRegScalarKind::S32,
+            Self::X64 => SimdRegScalarKind::D64,
+        }
+    }
 }
 
 /// Enumeration of the general purpose registers. The 32nd register is considered unknown.

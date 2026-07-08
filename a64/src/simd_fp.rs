@@ -7,7 +7,7 @@ use bitos::integer::{u3, u4, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{SimdReg, SimdRegScalar, SimdRegWidth};
+use crate::{Reg, RegWidth, SimdReg, SimdRegScalar, SimdRegWidth};
 
 /// Move immediate (vector)
 ///
@@ -160,9 +160,107 @@ impl Display for MoveImm {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatMoveOp {
+    SimdToReg,
+    RegToSimd,
+    SimdTopToReg,
+    RegToSimdTop,
+    Reserved,
+}
+
+/// Floating-point move to/from general-purpose register without conversion
+///
+/// This instruction transfers the contents of a SIMD & FP register to a general-purpose register,
+/// or the contents of a general-purpose register to a SIMD & FP register.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FloatMove {
+    /// The general-purpose destination register.
+    #[bits(0..5)]
+    pub rd_gpr: Reg,
+    /// The SIMD destination register.
+    #[bits(0..5)]
+    pub rd_simd: SimdReg,
+    /// The general-purpose source register.
+    #[bits(5..10)]
+    pub rn_gpr: Reg,
+    /// The general-purpose source register.
+    #[bits(5..10)]
+    pub rn_simd: SimdReg,
+    /// Operation info.
+    #[bits(16)]
+    pub opcode: bool,
+    /// Operation info.
+    #[bits(19)]
+    pub rmode: bool,
+    /// Width of the general-purpose register.
+    #[bits(31)]
+    pub sf: RegWidth,
+}
+
+impl FloatMove {
+    pub fn op(self) -> FloatMoveOp {
+        let sf = self.sf() as u32;
+        let rmode = self.rmode() as u32;
+        let opcode = self.opcode() as u32;
+
+        bit_match! {
+            match (sf, rmode, opcode) {
+                ("_", "0", "0") => FloatMoveOp::SimdToReg,
+                ("_", "0", "1") => FloatMoveOp::RegToSimd,
+                ("1", "1", "0") => FloatMoveOp::SimdTopToReg,
+                ("1", "1", "1") => FloatMoveOp::RegToSimdTop,
+                _ => FloatMoveOp::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for FloatMove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.op() {
+            FloatMoveOp::SimdToReg => {
+                write!(
+                    f,
+                    "FMOV {}, {}",
+                    self.rd_gpr().with_width(self.sf()),
+                    self.rn_simd().scalar(self.sf().scalar()),
+                )
+            }
+            FloatMoveOp::RegToSimd => {
+                write!(
+                    f,
+                    "FMOV {}, {}",
+                    self.rd_simd().scalar(self.sf().scalar()),
+                    self.rn_gpr().with_width(self.sf())
+                )
+            }
+            FloatMoveOp::SimdTopToReg => {
+                write!(
+                    f,
+                    "FMOV {}, {}.D[1]",
+                    self.rd_gpr().with_width(self.sf()),
+                    self.rn_simd(),
+                )
+            }
+            FloatMoveOp::RegToSimdTop => {
+                write!(
+                    f,
+                    "FMOV {}.D[1], {}",
+                    self.rd_simd(),
+                    self.rn_gpr().with_width(self.sf())
+                )
+            }
+            FloatMoveOp::Reserved => write!(f, "????"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     MoveImm(MoveImm),
+    FloatMove(FloatMove),
 }
 
 impl Instruction {
@@ -193,6 +291,46 @@ impl Instruction {
                 ("0", "1", "1111", "0") => return None,
                 ("1", "1", "1110", "0") => Self::MoveImm(MoveImm(value)),
                 ("1", "1", "1111", "0") => todo!("fmov vector imm 64 bit (double)"),
+                _ => return None,
+            }
+        })
+    }
+
+    fn new_conv_float_int(value: u32) -> Option<Self> {
+        let sf = value.bit(31) as u32;
+        let s = value.bit(29) as u32;
+        let ftype = value.bits(22, 24);
+        let rmode = value.bits(19, 21);
+        let opcode = value.bits(16, 19);
+
+        Some(bit_match! {
+            match (sf, s, ftype, rmode, opcode) {
+                ("_", "0", "00", "00", "000") => todo!("fcvtns scalar"),
+                ("_", "0", "00", "00", "001") => todo!("fcvtnu scalar"),
+                ("_", "0", "00", "00", "010") => todo!("scvtf scalar int"),
+                ("_", "0", "00", "00", "011") => todo!("ucvtf scalar int"),
+                ("_", "0", "00", "00", "100") => todo!("fcvtas scalar"),
+                ("_", "0", "00", "00", "101") => todo!("fcvtau scalar"),
+                ("0", "0", "00", "00", "11_") => Self::FloatMove(FloatMove(value)),
+                ("_", "0", "00", "01", "000") => todo!("fcvtps scalar"),
+                ("_", "0", "00", "01", "001") => todo!("fcvtpu scalar"),
+                ("_", "0", "00", "10", "000") => todo!("fcvtms scalar"),
+                ("_", "0", "00", "10", "001") => todo!("fcvtmu scalar"),
+                ("_", "0", "00", "11", "000") => todo!("fcvtzs scalar int"),
+                ("_", "0", "00", "11", "001") => todo!("fcvtzu scalar int"),
+                ("_", "0", "01", "00", "000") => todo!("fcvtns scalar"),
+                ("_", "0", "01", "00", "001") => todo!("fcvtnu scalar"),
+                ("_", "0", "01", "00", "010") => todo!("scvtf scalar int"),
+                ("_", "0", "01", "00", "011") => todo!("ucvtf scalar int"),
+                ("_", "0", "01", "00", "100") => todo!("fcvtas scalar"),
+                ("_", "0", "01", "00", "101") => todo!("fcvtau scalar"),
+                ("_", "0", "01", "01", "000") => todo!("fcvtps scalar"),
+                ("_", "0", "01", "01", "001") => todo!("fcvtpu scalar"),
+                ("_", "0", "01", "10", "000") => todo!("fcvtms scalar"),
+                ("_", "0", "01", "10", "001") => todo!("fcvtmu scalar"),
+                ("_", "0", "01", "11", "000") => todo!("fcvtzs scalar int"),
+                ("_", "0", "01", "11", "001") => todo!("fcvtzu scalar int"),
+                ("1", "0", "01", "0_", "11_") => Self::FloatMove(FloatMove(value)),
                 _ => return None,
             }
         })
@@ -249,7 +387,7 @@ impl Instruction {
                 ("1100", "01", "1000", "0001000", "__") => todo!("crypto two reg SHA 512"),
 
                 ("_0_1", "0_", "_0__", "_______", "__") => todo!("conv float - fixed"),
-                ("_0_1", "0_", "_1__", "___0000", "00") => todo!("conv float - int"),
+                ("_0_1", "0_", "_1__", "___0000", "00") => Self::new_conv_float_int(value)?,
                 ("_0_1", "0_", "_1__", "____100", "00") => todo!("float dp one src"),
                 ("_0_1", "0_", "_1__", "_____10", "00") => todo!("float cmp"),
                 ("_0_1", "0_", "_1__", "______1", "00") => todo!("float imm"),
