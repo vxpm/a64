@@ -442,6 +442,19 @@ impl Instruction {
         })
     }
 
+    fn new_simd_three_same(value: u32) -> Option<Self> {
+        let u = value.bit(29) as u32;
+        let size = value.bits(22, 24);
+        let opcode = value.bits(11, 16);
+
+        Some(bit_match! {
+            match (u, size, opcode) {
+                ("0", "10", "00011") => todo!("orr"),
+                _ => todo!(),
+            }
+        })
+    }
+
     fn new_simd_modified_imm(value: u32) -> Option<Self> {
         let q = value.bit(30) as u32;
         let op1 = value.bit(29) as u32;
@@ -554,7 +567,7 @@ impl Instruction {
                 ("0__0", "0_", "_100", "00_____", "10") => todo!("simd two reg misc"),
                 ("0__0", "0_", "_110", "00_____", "10") => todo!("simd across lanes"),
                 ("0__0", "0_", "_1__", "_______", "00") => todo!("simd three diff"),
-                ("0__0", "0_", "_1__", "_______", "_1") => todo!("simd three same"),
+                ("0__0", "0_", "_1__", "_______", "_1") => Self::new_simd_three_same(value)?,
                 ("0__0", "10", "0000", "_______", "_1") => Self::new_simd_modified_imm(value)?,
                 ("0__0", "10", "____", "_______", "_1") => todo!("simd shift by imm"),
                 ("0__0", "1_", "____", "_______", "_0") => todo!("simd vector x indexed elem"),
