@@ -55,7 +55,7 @@ impl IntMove {
                 "___10" => imm.bits(2, 5),
                 "__100" => imm.bits(3, 5),
                 "_1000" => imm.bits(4, 5),
-                _ => 0,
+                _ => 255,
             }
         }
     }
@@ -73,6 +73,78 @@ impl Display for IntMove {
             self.rn(),
             self.elem_kind(),
             self.index()
+        )
+    }
+}
+
+/// Insert vector element from general-purpose register
+///
+/// This instruction copies the contents of the source general-purpose register to the specified
+/// vector element in the destination SIMD & FP register.
+///
+/// This instruction can insert data into individual elements within a SIMD & FP register without
+/// clearing the remaining bits to zero.
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Insert {
+    /// The SIMD destination register.
+    #[bits(0..5)]
+    pub rd: SimdReg,
+    /// The general-purpose source register.
+    #[bits(5..10)]
+    pub rn: Reg,
+    /// Operation info.
+    #[bits(16..21)]
+    pub imm: u5,
+}
+
+impl Insert {
+    pub fn elem_kind(self) -> SimdScalarKind {
+        let imm = self.imm().value();
+        bit_match! {
+            match imm {
+                "____1" => SimdScalarKind::B,
+                "___10" => SimdScalarKind::H,
+                "__100" => SimdScalarKind::S,
+                "_1000" => SimdScalarKind::D,
+                _ => SimdScalarKind::Q,
+            }
+        }
+    }
+
+    pub fn index(self) -> u8 {
+        let imm = self.imm().value();
+        bit_match! {
+            match imm {
+                "____1" => imm.bits(1, 5),
+                "___10" => imm.bits(2, 5),
+                "__100" => imm.bits(3, 5),
+                "_1000" => imm.bits(4, 5),
+                _ => 255,
+            }
+        }
+    }
+
+    pub fn width(self) -> RegWidth {
+        let imm = self.imm().value();
+        bit_match! {
+            match imm {
+                "_1000" => RegWidth::X64,
+                _ => RegWidth::W32,
+            }
+        }
+    }
+}
+
+impl Display for Insert {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "INS {}.{}[{}], {}",
+            self.rd(),
+            self.elem_kind(),
+            self.index(),
+            self.rn().with_width(self.width()),
         )
     }
 }
@@ -328,6 +400,7 @@ impl Display for FloatMove {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum Instruction {
     IntMove(IntMove),
+    Insert(Insert),
     MoveImm(MoveImm),
     FloatMove(FloatMove),
 }
@@ -343,13 +416,26 @@ impl Instruction {
             match (q, op, imm5, imm4) {
                 ("_", "0", "_____", "0000") => todo!("dup elem"),
                 ("_", "0", "_____", "0001") => todo!("dup general"),
+
+                // smov 32 bit
                 ("0", "0", "___00", "0101") => return None,
                 ("0", "0", "_____", "0101") => Self::IntMove(IntMove(value)),
+
+                // umov 32 bit
                 ("0", "0", "__000", "0111") => return None,
-                ("0", "0", "_____", "0111") => Self::IntMove(IntMove(value)), // unsigned
-                ("1", "0", "_____", "0011") => todo!("ins general"),
+                ("0", "0", "_____", "0111") => Self::IntMove(IntMove(value)),
+
+                // ins general
+                ("1", "0", "_0000", "0011") => return None,
+                ("1", "0", "_____", "0011") => Self::Insert(Insert(value)),
+
+                // smov 64 bit
+                ("1", "0", "__000", "0101") => return None,
                 ("1", "0", "_____", "0101") => Self::IntMove(IntMove(value)),
-                ("1", "0", "_1000", "0111") => Self::IntMove(IntMove(value)), // unsigned
+
+                // umov 64 bit
+                ("1", "0", "_1000", "0111") => Self::IntMove(IntMove(value)),
+
                 ("1", "1", "_____", "____") => todo!("ins elem"),
                 _ => return None,
             }
