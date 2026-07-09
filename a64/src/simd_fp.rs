@@ -7,7 +7,7 @@ use bitos::integer::{u3, u4, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{Reg, RegWidth, SimdReg, SimdRegScalar, SimdRegWidth, SimdScalarKind};
+use crate::{DataSize, Reg, RegWidth, SimdReg, SimdRegScalar, SimdRegWidth, SimdScalarKind};
 
 /// Move vector element to general-purpose register
 ///
@@ -34,15 +34,15 @@ pub struct IntMove {
 }
 
 impl IntMove {
-    pub fn elem_kind(self) -> SimdScalarKind {
+    pub fn elem_size(self) -> DataSize {
         let imm = self.imm().value();
         bit_match! {
             match imm {
-                "____1" => SimdScalarKind::B,
-                "___10" => SimdScalarKind::H,
-                "__100" => SimdScalarKind::S,
-                "_1000" => SimdScalarKind::D,
-                _ => SimdScalarKind::Q,
+                "____1" => DataSize::B8,
+                "___10" => DataSize::B16,
+                "__100" => DataSize::B32,
+                "_1000" => DataSize::B64,
+                _ => DataSize::B8,
             }
         }
     }
@@ -71,7 +71,7 @@ impl Display for IntMove {
             mnemonic,
             self.rd().with_width(self.q()),
             self.rn(),
-            self.elem_kind(),
+            self.elem_size().scalar_kind(),
             self.index()
         )
     }
@@ -99,15 +99,15 @@ pub struct Insert {
 }
 
 impl Insert {
-    pub fn elem_kind(self) -> SimdScalarKind {
+    pub fn elem_size(self) -> DataSize {
         let imm = self.imm().value();
         bit_match! {
             match imm {
-                "____1" => SimdScalarKind::B,
-                "___10" => SimdScalarKind::H,
-                "__100" => SimdScalarKind::S,
-                "_1000" => SimdScalarKind::D,
-                _ => SimdScalarKind::Q,
+                "____1" => DataSize::B8,
+                "___10" => DataSize::B16,
+                "__100" => DataSize::B32,
+                "_1000" => DataSize::B64,
+                _ => DataSize::B8,
             }
         }
     }
@@ -142,11 +142,34 @@ impl Display for Insert {
             f,
             "INS {}.{}[{}], {}",
             self.rd(),
-            self.elem_kind(),
+            self.elem_size().scalar_kind(),
             self.index(),
             self.rn().with_width(self.width()),
         )
     }
+}
+
+#[bitos(32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThreeSame {
+    /// SIMD destination register.
+    #[bits(0..5)]
+    pub rd: SimdReg,
+    /// SIMD source register 1.
+    #[bits(5..10)]
+    pub rn: SimdReg,
+    /// Operation info.
+    #[bits(10..15)]
+    pub opcode: u5,
+    /// SIMD source register 2.
+    #[bits(16..21)]
+    pub rm: SimdReg,
+    /// Element size.
+    #[bits(22..24)]
+    pub size: DataSize,
+    /// Width of the registers.
+    #[bits(30)]
+    pub q: SimdRegWidth,
 }
 
 /// Move immediate (vector)
@@ -156,7 +179,7 @@ impl Display for Insert {
 #[bitos(32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveImm {
-    /// The SIMD destination register.
+    /// SIMD destination register.
     #[bits(0..5)]
     pub rd: SimdReg,
     /// Lower bits of the immediate (d:e:f:g:h).
@@ -401,6 +424,7 @@ impl Display for FloatMove {
 pub enum Instruction {
     IntMove(IntMove),
     Insert(Insert),
+    ThreeSame(ThreeSame),
     MoveImm(MoveImm),
     FloatMove(FloatMove),
 }
@@ -443,10 +467,6 @@ impl Instruction {
     }
 
     fn new_simd_three_same(value: u32) -> Option<Self> {
-        let u = value.bit(29) as u32;
-        let size = value.bits(22, 24);
-        let opcode = value.bits(11, 16);
-
         Some(bit_match! {
             match (u, size, opcode) {
                 ("0", "10", "00011") => todo!("orr"),

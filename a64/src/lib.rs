@@ -39,6 +39,16 @@ impl DataSize {
     pub fn bytes(self) -> u32 {
         self.bits() / 8
     }
+
+    #[inline(always)]
+    pub fn scalar_kind(self) -> SimdScalarKind {
+        match self {
+            Self::B8 => SimdScalarKind::B,
+            Self::B16 => SimdScalarKind::H,
+            Self::B32 => SimdScalarKind::S,
+            Self::B64 => SimdScalarKind::D,
+        }
+    }
 }
 
 impl Display for DataSize {
