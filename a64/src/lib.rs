@@ -645,6 +645,23 @@ impl Display for SimdScalarKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SimdFormat {
+    pub elem_size: DataSize,
+    pub vector_width: SimdRegWidth,
+}
+
+impl Display for SimdFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.vector_width.bytes() / self.elem_size.bytes(),
+            self.elem_size.scalar_kind()
+        )
+    }
+}
+
 /// Enumeration of the SIMD & FP registers.
 #[bitos(5)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -873,7 +890,9 @@ fn test_app() {
         if let Some(ins) = Instruction::new(value) {
             println!("[{offset:08X} / {index:04}] {value:08X} => {ins}");
         } else {
-            println!("[{offset:08X} / {index:04}] {value:08X} => UNKNOWN ({value:032b})");
+            println!(
+                "[{offset:08X} / {index:04}] {value:08X} => UNKNOWN ({value:08X}) ({value:032b})"
+            );
             panic!();
         }
 

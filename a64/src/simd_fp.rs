@@ -7,7 +7,7 @@ use bitos::integer::{u3, u4, u5};
 use bitos::{BitUtils, bitos};
 use derive_more::Display;
 
-use crate::{DataSize, Reg, RegWidth, SimdReg, SimdRegScalar, SimdRegWidth, SimdScalarKind};
+use crate::{DataSize, Reg, RegWidth, SimdFormat, SimdReg, SimdRegScalar, SimdRegWidth};
 
 /// Move vector element to general-purpose register
 ///
@@ -149,6 +149,103 @@ impl Display for Insert {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreeSameOp {
+    SignedHalvingAdd,
+    SignedSaturateAdd,
+    SignedRoundHalvingAdd,
+    SignedHalvingSub,
+    SignedSaturateSub,
+    CmpSignedGreater,
+    CmpSignedGreaterEqual,
+    SignedShiftLeft,
+    SignedSaturateShiftLeft,
+    SignedRoundShiftLeft,
+    SignedSaturateRoundShiftLeft,
+    SignedMax,
+    SignedMin,
+    SignedAbsDiff,
+    SignedAbsDiffAcc,
+    Add,
+    CmpTest,
+    MulAddAcc,
+    Mul,
+    SignedMaxPair,
+    SignedMinPair,
+    SignedSaturateDoublingMulHigh,
+    AddPair,
+    FloatMaxNum,
+    FloatMulAddAcc,
+    FloatAdd,
+    FloatMulExt,
+    FloatCmpEqual,
+    FloatMax,
+    FloatRecipStep,
+    And,
+    FloatMulAddLongAcc,
+    AndNot,
+    FloatMinNum,
+    FloatMulSubAcc,
+    FloatSub,
+    FloatMin,
+    FloatRecipSqrtStep,
+    Or,
+    FloatMulSubLongAcc,
+    OrNot,
+    Reserved,
+}
+
+impl Display for ThreeSameOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mnemonic = match self {
+            Self::SignedHalvingAdd => "SHADD",
+            Self::SignedSaturateAdd => "SQADD",
+            Self::SignedRoundHalvingAdd => "SRHADD",
+            Self::SignedHalvingSub => "SHSUB",
+            Self::SignedSaturateSub => "SQSUB",
+            Self::CmpSignedGreater => "CMGT",
+            Self::CmpSignedGreaterEqual => "CMGE",
+            Self::SignedShiftLeft => "SSHL",
+            Self::SignedSaturateShiftLeft => "SQSHL",
+            Self::SignedRoundShiftLeft => "SRSHL",
+            Self::SignedSaturateRoundShiftLeft => "SQRSHL",
+            Self::SignedMax => "SMAX",
+            Self::SignedMin => "SMIN",
+            Self::SignedAbsDiff => "SABD",
+            Self::SignedAbsDiffAcc => "SABA",
+            Self::Add => "ADD",
+            Self::CmpTest => "CMTST",
+            Self::MulAddAcc => "MLA",
+            Self::Mul => "MUL",
+            Self::SignedMaxPair => "SMAXP",
+            Self::SignedMinPair => "SMINP",
+            Self::SignedSaturateDoublingMulHigh => "SQDMULH",
+            Self::AddPair => "ADDP",
+            Self::FloatMaxNum => "FMAXNM",
+            Self::FloatMulAddAcc => "FMLA",
+            Self::FloatAdd => "FADD",
+            Self::FloatMulExt => "FMULX",
+            Self::FloatCmpEqual => "FCMEQ",
+            Self::FloatMax => "FMAX",
+            Self::FloatRecipStep => "FRECPS",
+            Self::And => "AND",
+            Self::FloatMulAddLongAcc => "FMLAL",
+            Self::AndNot => "BIC",
+            Self::FloatMinNum => "FMINNM",
+            Self::FloatMulSubAcc => "FMLS",
+            Self::FloatSub => "FSUB",
+            Self::FloatMin => "FMIN",
+            Self::FloatRecipSqrtStep => "FSQRTS",
+            Self::Or => "ORR",
+            Self::FloatMulSubLongAcc => "FMLSL",
+            Self::OrNot => "ORN",
+            Self::Reserved => "????",
+        };
+
+        write!(f, "{mnemonic}")
+    }
+}
+
 #[bitos(32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThreeSame {
@@ -159,7 +256,7 @@ pub struct ThreeSame {
     #[bits(5..10)]
     pub rn: SimdReg,
     /// Operation info.
-    #[bits(10..15)]
+    #[bits(11..16)]
     pub opcode: u5,
     /// SIMD source register 2.
     #[bits(16..21)]
@@ -167,9 +264,90 @@ pub struct ThreeSame {
     /// Element size.
     #[bits(22..24)]
     pub size: DataSize,
+    /// Operation info.
+    #[bits(29)]
+    pub u: bool,
     /// Width of the registers.
     #[bits(30)]
     pub q: SimdRegWidth,
+}
+
+impl ThreeSame {
+    pub fn op(self) -> ThreeSameOp {
+        use ThreeSameOp as Op;
+
+        let u = self.u() as u32;
+        let size = self.size() as u32;
+        let opcode = self.opcode().value();
+
+        bit_match! {
+            match (u, size, opcode) {
+                ("0", "__", "00000") => Op::SignedHalvingAdd,
+                ("0", "__", "00001") => Op::SignedSaturateAdd,
+                ("0", "__", "00010") => Op::SignedRoundHalvingAdd,
+                ("0", "__", "00100") => Op::SignedHalvingSub,
+                ("0", "__", "00101") => Op::SignedSaturateSub,
+                ("0", "__", "00110") => Op::CmpSignedGreater,
+                ("0", "__", "00111") => Op::CmpSignedGreaterEqual,
+                ("0", "__", "01000") => Op::SignedShiftLeft,
+                ("0", "__", "01001") => Op::SignedSaturateShiftLeft,
+                ("0", "__", "01010") => Op::SignedRoundShiftLeft,
+                ("0", "__", "01011") => Op::SignedSaturateRoundShiftLeft,
+                ("0", "__", "01100") => Op::SignedMax,
+                ("0", "__", "01101") => Op::SignedMin,
+                ("0", "__", "01110") => Op::SignedAbsDiff,
+                ("0", "__", "01111") => Op::SignedAbsDiffAcc,
+                ("0", "__", "10000") => Op::Add,
+                ("0", "__", "10001") => Op::CmpTest,
+                ("0", "__", "10010") => Op::MulAddAcc,
+                ("0", "__", "10011") => Op::Mul,
+                ("0", "__", "10100") => Op::SignedMaxPair,
+                ("0", "__", "10101") => Op::SignedMinPair,
+                ("0", "__", "10110") => Op::SignedSaturateDoublingMulHigh,
+                ("0", "__", "10111") => Op::AddPair,
+                ("0", "0_", "11000") => Op::FloatMaxNum,
+                ("0", "0_", "11001") => Op::FloatMulAddAcc,
+                ("0", "0_", "11010") => Op::FloatAdd,
+                ("0", "0_", "11011") => Op::FloatMulExt,
+                ("0", "0_", "11100") => Op::FloatCmpEqual,
+                ("0", "0_", "11110") => Op::FloatMax,
+                ("0", "0_", "11111") => Op::FloatRecipStep,
+                ("0", "00", "00011") => Op::And,
+                ("0", "00", "11101") => Op::FloatMulAddLongAcc,
+                ("0", "01", "00011") => Op::AndNot,
+                ("0", "1_", "11000") => Op::FloatMinNum,
+                ("0", "1_", "11001") => Op::FloatMulSubAcc,
+                ("0", "1_", "11010") => Op::FloatSub,
+                ("0", "1_", "11110") => Op::FloatMin,
+                ("0", "1_", "11111") => Op::FloatRecipSqrtStep,
+                ("0", "10", "00011") => Op::Or,
+                ("0", "10", "11101") => Op::FloatMulSubLongAcc,
+                ("0", "11", "00011") => Op::OrNot,
+                _ => Op::Reserved,
+            }
+        }
+    }
+}
+
+impl Display for ThreeSame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let format = SimdFormat {
+            elem_size: self.size(),
+            vector_width: self.q(),
+        };
+
+        write!(
+            f,
+            "{} {}.{}, {}.{}, {}.{}",
+            self.op(),
+            self.rd(),
+            format,
+            self.rn(),
+            format,
+            self.rm(),
+            format,
+        )
+    }
 }
 
 /// Move immediate (vector)
@@ -467,12 +645,12 @@ impl Instruction {
     }
 
     fn new_simd_three_same(value: u32) -> Option<Self> {
-        Some(bit_match! {
-            match (u, size, opcode) {
-                ("0", "10", "00011") => todo!("orr"),
-                _ => todo!(),
-            }
-        })
+        let three_same = ThreeSame(value);
+        if three_same.op() != ThreeSameOp::Reserved {
+            Some(Self::ThreeSame(three_same))
+        } else {
+            todo!("possibly three same (remaining ops)")
+        }
     }
 
     fn new_simd_modified_imm(value: u32) -> Option<Self> {
